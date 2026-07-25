@@ -75,8 +75,12 @@ cycles rather than all at once, to re-familiarize with Django along the way.
    "most recent assessment" logic (extracted to
    `_latest_assessments_by_risk()`) so current scores agree between views.
    Row titles link to the admin change page — no custom detail view yet.
-6. **Trend + overdue widgets** — aggregate risk score over time from
-   assessment history; overdue mitigations list.
+6. **Trend + overdue widgets** (done) — added to the heatmap page (`/`)
+   rather than a new page. Trend chart (Chart.js, first real use of it)
+   reconstructs average current score per month across the portfolio's
+   assessment history, so completed mitigations pull the line down after
+   the fact rather than only affecting a final snapshot. Overdue widget
+   lists `Mitigation`s past `due_date` and not `complete`.
 7. **Audit trail** — wire up `django-simple-history` on the core models.
 8. **Polish** — README, `pyproject.toml` cleanup, light styling pass.
 

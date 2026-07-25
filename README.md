@@ -82,5 +82,23 @@ in `risks/views.py` so both views agree on what "current score" means).
 Row titles link through to the admin change page for that risk — no
 custom detail view yet, that wasn't in scope for this cycle.
 
-No trend charts, overdue widgets, or audit trail yet — that's cycles 6+.
-See [SPEC.md](SPEC.md) for the full roadmap.
+## Cycle 6 (done)
+
+Added a trend chart and an overdue-mitigations list to the heatmap page
+(`/`) — turning it into the actual dashboard rather than adding a third
+nav item. First real use of Chart.js (loaded via CDN, as originally
+planned).
+
+- **Risk Score Trend**: reconstructs the portfolio's average current
+  score at the end of every month with at least one assessment (19
+  months of data currently), not just a point-in-time snapshot — a
+  risk's score contributes to every month from its first assessment
+  onward, so a mitigation completing partway through actually pulls the
+  average down in the months after. Logic in `_monthly_trend()`
+  (`risks/views.py`).
+- **Overdue Mitigations**: any `Mitigation` past its `due_date` and not
+  `complete`, with days-overdue computed per row. Logic in
+  `_overdue_mitigations()`.
+
+No audit trail yet — that's cycle 7. See [SPEC.md](SPEC.md) for the full
+roadmap.

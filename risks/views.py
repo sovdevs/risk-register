@@ -1,6 +1,10 @@
-from django.shortcuts import render
+from collections import defaultdict
+from datetime import date
 
-from .models import Department, Risk, RiskAssessment, RiskCategory
+from django.shortcuts import render
+from django.utils import timezone
+
+from .models import Department, Mitigation, Risk, RiskAssessment, RiskCategory
 
 SCORE_BANDS = [
     (4, "low"),
@@ -29,6 +33,60 @@ def _latest_assessments_by_risk():
     for assessment in assessments:
         latest_by_risk.setdefault(assessment.risk_id, assessment)
     return latest_by_risk
+
+
+def _monthly_trend():
+    # Reconstructs the portfolio's average risk score at the end of each
+    # calendar month, using whichever assessment was "current" per risk as
+    # of that month (same latest-as-of-a-point-in-time idea as
+    # _latest_assessments_by_risk, but walked forward through time instead
+    # of collapsed to "now"). This is what makes completed mitigations show
+    # up as the average trending down, not just a snapshot.
+    assessments = list(
+        RiskAssessment.objects.order_by("assessed_date", "id")
+    )
+    if not assessments:
+        return {"labels": [], "scores": []}
+
+    by_month = defaultdict(list)
+    for assessment in assessments:
+        key = (assessment.assessed_date.year, assessment.assessed_date.month)
+        by_month[key].append(assessment)
+
+    today = timezone.localdate()
+    year, month = assessments[0].assessed_date.year, assessments[0].assessed_date.month
+
+    current = {}
+    labels = []
+    scores = []
+    while (year, month) <= (today.year, today.month):
+        for assessment in by_month.get((year, month), []):
+            current[assessment.risk_id] = assessment
+        labels.append(date(year, month, 1).strftime("%b %Y"))
+        scores.append(
+            round(sum(a.score for a in current.values()) / len(current), 2)
+            if current
+            else None
+        )
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+
+    return {"labels": labels, "scores": scores}
+
+
+def _overdue_mitigations():
+    today = timezone.localdate()
+    overdue = list(
+        Mitigation.objects.filter(due_date__lt=today)
+        .exclude(status=Mitigation.Status.COMPLETE)
+        .select_related("risk", "owner")
+        .order_by("due_date")
+    )
+    for mitigation in overdue:
+        mitigation.days_overdue = (today - mitigation.due_date).days
+    return overdue
 
 
 def heatmap(request):
@@ -60,6 +118,8 @@ def heatmap(request):
         "grid": grid,
         "total_risks": Risk.objects.count(),
         "assessed_risks": len(latest_by_risk),
+        "trend_data": _monthly_trend(),
+        "overdue_mitigations": _overdue_mitigations(),
     }
     return render(request, "risks/heatmap.html", context)
 
