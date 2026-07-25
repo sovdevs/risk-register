@@ -72,5 +72,15 @@ in the GRC world, and it needed no extra dependency; Chart.js is still
 the plan for the trend line chart in a later cycle. `risks/urls.py`
 introduced, `config/urls.py` now includes it at the root path.
 
-No filters, trends, overdue widgets, or audit trail yet — that's cycles
-5+. See [SPEC.md](SPEC.md) for the full roadmap.
+## Cycle 5 (done)
+
+Filterable risk register at `/register/` — status/category/department
+filters as GET params (bookmarkable/shareable URLs), each risk's row
+showing its current score badge via the same "most recent assessment"
+logic the heatmap uses (factored out into `_latest_assessments_by_risk()`
+in `risks/views.py` so both views agree on what "current score" means).
+Row titles link through to the admin change page for that risk — no
+custom detail view yet, that wasn't in scope for this cycle.
+
+No trend charts, overdue widgets, or audit trail yet — that's cycles 6+.
+See [SPEC.md](SPEC.md) for the full roadmap.

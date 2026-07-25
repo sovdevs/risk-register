@@ -70,8 +70,11 @@ cycles rather than all at once, to re-familiarize with Django along the way.
    (Moved up from its original slot after cycle 3 — the visible payoff
    outweighs sequencing purity; audit trail below is invisible
    infrastructure by comparison.)
-5. **Filterable register view** — list page with status/category/
-   department filters.
+5. **Filterable register view** (done) — list page at `/register/` with
+   status/category/department filters as GET params. Shares the heatmap's
+   "most recent assessment" logic (extracted to
+   `_latest_assessments_by_risk()`) so current scores agree between views.
+   Row titles link to the admin change page — no custom detail view yet.
 6. **Trend + overdue widgets** — aggregate risk score over time from
    assessment history; overdue mitigations list.
 7. **Audit trail** — wire up `django-simple-history` on the core models.

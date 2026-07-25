@@ -1,0 +1,115 @@
+{% extends "risks/base.html" %}
+
+{% block title %}Risk Register{% endblock %}
+
+{% block content %}
+<h1>Risk Register</h1>
+
+<style>
+  form.filters {
+    display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;
+    margin: 1.25rem 0;
+  }
+  form.filters label {
+    display: flex; flex-direction: column; font-size: 0.8rem;
+    color: var(--muted); gap: 0.25rem;
+  }
+  form.filters select {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0.4rem 0.5rem; font-size: 0.9rem;
+  }
+  form.filters button, form.filters a.clear {
+    border: 1px solid var(--border); background: transparent; color: var(--fg);
+    border-radius: 4px; padding: 0.45rem 0.9rem; font-size: 0.85rem;
+    cursor: pointer; text-decoration: none;
+  }
+  table.register { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.9rem; }
+  table.register th, table.register td {
+    border-bottom: 1px solid var(--border); padding: 0.5rem 0.6rem; text-align: left;
+  }
+  table.register th {
+    color: var(--muted); font-weight: 600; font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .badge {
+    display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px;
+    font-size: 0.75rem; font-weight: 600; color: #111827;
+  }
+  .status-badge { color: var(--fg); border: 1px solid var(--border); }
+  .band-low { background: var(--low); }
+  .band-medium { background: var(--medium); }
+  .band-high { background: var(--high); }
+  .band-critical { background: var(--critical); }
+  a.row-link { color: inherit; text-decoration: none; }
+  a.row-link:hover { text-decoration: underline; }
+</style>
+
+<form class="filters" method="get">
+  <label>
+    Status
+    <select name="status">
+      <option value="">All</option>
+      {% for value, label in statuses %}
+        <option value="{{ value }}" {% if value == selected_status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Category
+    <select name="category">
+      <option value="">All</option>
+      {% for category in categories %}
+        <option value="{{ category.id }}" {% if category.id|stringformat:"s" == selected_category %}selected{% endif %}>{{ category.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    Department
+    <select name="department">
+      <option value="">All</option>
+      {% for department in departments %}
+        <option value="{{ department.id }}" {% if department.id|stringformat:"s" == selected_department %}selected{% endif %}>{{ department.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Apply</button>
+  <a class="clear" href="{% url 'risks:register' %}">Clear</a>
+</form>
+
+<p style="color: var(--muted);">{{ result_count }} risk{{ result_count|pluralize }}</p>
+
+<table class="register">
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Category</th>
+      <th>Department</th>
+      <th>Owner</th>
+      <th>Status</th>
+      <th>Score</th>
+      <th>Identified</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for risk in risks %}
+    <tr>
+      <td><a class="row-link" href="/admin/risks/risk/{{ risk.id }}/change/">{{ risk.title }}</a></td>
+      <td>{{ risk.category.name }}</td>
+      <td>{{ risk.department.name }}</td>
+      <td>{{ risk.owner.get_full_name|default:risk.owner.username }}</td>
+      <td><span class="badge status-badge">{{ risk.get_status_display }}</span></td>
+      <td>
+        {% if risk.current_score %}
+          <span class="badge band-{{ risk.current_band }}">{{ risk.current_score }}</span>
+        {% else %}
+          <span style="color: var(--muted);">—</span>
+        {% endif %}
+      </td>
+      <td>{{ risk.date_identified }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" style="color: var(--muted); padding: 1rem 0.6rem;">No risks match these filters.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
