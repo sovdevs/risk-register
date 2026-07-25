@@ -1,6 +1,38 @@
 # Risk Register
 
-See [SPEC.md](SPEC.md) for the full data model and feature-cycle roadmap.
+A place to track organizational risks — the kind of tool a compliance or
+security team uses to answer "what could go wrong, how bad would it be,
+and what are we doing about it." Built in short, runnable Django cycles;
+see [SPEC.md](SPEC.md) for the full data model and roadmap, or the
+cycle-by-cycle notes below for what shipped when and why.
+
+**What it does:**
+
+- **Log a risk** — title, description, category (Cyber, Financial, Legal
+  & Regulatory, etc.), owning department, responsible owner, and a
+  lifecycle status (identified → assessing → mitigating → monitoring →
+  closed).
+- **Score it** — likelihood (1–5) × impact (1–5) → a 1–25 score. Every
+  risk gets an *inherent* score when first assessed, and a *residual*
+  score once its mitigation completes, so you can see how much a
+  treatment actually reduced the risk.
+- **Plan a response** — treatment type (accept/mitigate/transfer/avoid),
+  action plan, owner, due date.
+- **See it at a glance** — the heatmap (`/`) plots every risk on a 5×5
+  likelihood × impact grid, color-banded Low→Critical, using each risk's
+  *current* (most recent) score. The same page has a trend chart of the
+  portfolio's average score over time and a list of overdue mitigations.
+- **Slice the list** — the register (`/register/`) is a filterable table
+  by status/category/department, with each row's current score and a
+  link into the full record.
+- **Full audit trail** — every change to a risk, assessment, or
+  mitigation is versioned (`django-simple-history`), with a "History"
+  page in admin showing who changed what and when.
+- **Data entry** — Django admin (`/admin/`) handles actual CRUD.
+
+Comes seeded with 27 realistic risks across 7 categories (unpatched CVEs,
+GDPR backlogs, vendor risk, budget overruns, etc.) — see `seed_demo`
+below.
 
 ## Running it
 
@@ -100,5 +132,26 @@ planned).
   `complete`, with days-overdue computed per row. Logic in
   `_overdue_mitigations()`.
 
-No audit trail yet — that's cycle 7. See [SPEC.md](SPEC.md) for the full
-roadmap.
+## Cycle 7 (done)
+
+Audit trail via `django-simple-history` on `Risk`, `RiskAssessment`, and
+`Mitigation` — every save creates a timestamped snapshot, and edits made
+through the web (admin) also record which user made them
+(`HistoryRequestMiddleware`). `Risk`'s admin page got a working "History"
+button (`SimpleHistoryAdmin`) that lists every past version with a diff.
+Existing seeded rows got a one-time backfilled snapshot via
+`manage.py populate_history --auto`; going forward, `history` populates
+automatically on every save, including future `seed_demo --flush` runs
+— no extra step needed for those.
+
+## Cycle 8 (done) — Milestone 2: app complete
+
+Polish pass: `pyproject.toml` description filled in, duplicated CSS
+(`.band-*`, `.row-link`) consolidated from `heatmap.html`/`register.html`
+into the shared `base.html`, this README reorganized with an overview up
+top instead of requiring a read through all 8 cycles to know what the app
+does.
+
+This closes out the planned roadmap in [SPEC.md](SPEC.md). Next up: the
+second project (`controlmappingcoverage`), and exploring where an AI
+feature could add real value on top of either app.

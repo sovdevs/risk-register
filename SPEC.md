@@ -81,8 +81,19 @@ cycles rather than all at once, to re-familiarize with Django along the way.
    assessment history, so completed mitigations pull the line down after
    the fact rather than only affecting a final snapshot. Overdue widget
    lists `Mitigation`s past `due_date` and not `complete`.
-7. **Audit trail** — wire up `django-simple-history` on the core models.
-8. **Polish** — README, `pyproject.toml` cleanup, light styling pass.
+7. **Audit trail** (done) — `django-simple-history` on Risk, RiskAssessment,
+   Mitigation. `HistoryRequestMiddleware` captures which user made a change
+   via the web. `SimpleHistoryAdmin` gives Risk a working History page.
+   Existing seeded rows backfilled once via `populate_history --auto`;
+   new saves (including future reseeds) track automatically from here on.
+8. **Polish** (done) — `pyproject.toml` description, shared CSS
+   (`.band-*`, `.row-link`) deduplicated into `base.html`, README
+   reorganized with an overview instead of requiring all 8 cycles read
+   to understand the app.
+
+   — **Milestone 2: app complete.** Full roadmap shipped. Next: the
+   second project (`controlmappingcoverage`), and scoping where an AI
+   feature could add real value on top of either app.
 
 Each cycle ends in a state where `uv run python manage.py runserver` works
 and the new feature is visible/checkable.

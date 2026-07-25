@@ -1,10 +1,11 @@
 [project]
 name = "riskregister"
 version = "0.1.0"
-description = "Add your description here"
+description = "Enterprise-style risk register (likelihood x impact scoring, mitigation tracking, audit trail, heatmap dashboard) built with Django"
 requires-python = ">=3.13"
 dependencies = [
     "django>=6.0.7",
+    "django-simple-history>=3.13.0",
     "faker>=40.36.0",
     "pyyaml>=6.0.3",
 ]

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from simple_history.models import HistoricalRecords
 
 
 class Department(models.Model):
@@ -49,6 +50,7 @@ class Risk(models.Model):
     )
     date_identified = models.DateField()
     next_review_date = models.DateField(null=True, blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["-date_identified"]
@@ -75,6 +77,7 @@ class RiskAssessment(models.Model):
     )
     assessed_date = models.DateField()
     notes = models.TextField(blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["-assessed_date"]
@@ -109,6 +112,7 @@ class Mitigation(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.NOT_STARTED
     )
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["due_date"]

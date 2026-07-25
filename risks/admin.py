@@ -1,4 +1,5 @@
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import Department, Mitigation, Risk, RiskAssessment, RiskCategory
 
@@ -38,7 +39,7 @@ class RiskCategoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(Risk)
-class RiskAdmin(admin.ModelAdmin):
+class RiskAdmin(SimpleHistoryAdmin):
     list_display = [
         "title",
         "category",
