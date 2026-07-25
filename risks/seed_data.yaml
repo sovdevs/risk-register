@@ -1,0 +1,348 @@
+# Content for `manage.py seed_demo`, kept separate from the command's logic
+# (risks/management/commands/seed_demo.py) so it can be hand-edited or have
+# LLM-generated text pasted in without touching code.
+
+departments:
+  - IT
+  - Finance
+  - Legal
+  - Operations
+  - HR
+  - Third-Party Management
+  - Sales
+
+# severity_range is the [likelihood, impact] randint bound used for each
+# risk's inherent assessment in this category, so the heatmap/dashboard
+# built in later cycles has a believable shape instead of uniform noise.
+categories:
+  Cyber:
+    description: Threats to confidentiality, integrity, or availability of systems and data.
+    severity_range: [3, 5]
+  Third-Party:
+    description: Risks introduced by vendors, suppliers, and partners.
+    severity_range: [3, 5]
+  Legal & Regulatory:
+    description: Risks from non-compliance with laws and regulations.
+    severity_range: [2, 4]
+  Financial:
+    description: Risks affecting the organization's financial position.
+    severity_range: [2, 4]
+  Operational:
+    description: Risks from failed internal processes, people, or systems.
+    severity_range: [2, 4]
+  Reputational:
+    description: Risks to the organization's public standing or trust.
+    severity_range: [2, 4]
+  Compliance:
+    description: Risks from failing internal policy or external standards.
+    severity_range: [1, 3]
+
+risks:
+  Cyber:
+    - title: Unpatched critical vulnerability on internet-facing systems
+      description: >-
+        A critical CVE affecting the public-facing application gateway has not
+        been patched. Automated vulnerability scans have flagged it as remotely
+        exploitable, and a proof-of-concept exploit is already circulating,
+        giving attackers a viable path to system compromise without
+        authentication.
+      mitigation_action_plan: >-
+        Apply the vendor patch in the next scheduled maintenance window, or
+        deploy a compensating WAF rule if patching must wait. Re-scan the
+        affected hosts within 48 hours of remediation and confirm the CVE no
+        longer appears in the scan report.
+    - title: Ransomware infection via phishing email
+      description: >-
+        A targeted phishing campaign delivering ransomware payloads has been
+        observed against similar organizations in the sector. Current email
+        filtering and endpoint detection may not catch a well-crafted lure,
+        and successful execution could encrypt shared drives before
+        detection.
+      mitigation_action_plan: >-
+        Roll out advanced email filtering with attachment sandboxing and
+        enforce application allow-listing on endpoints to block unauthorized
+        executables. Run a phishing simulation campaign and require remedial
+        training for anyone who fails it.
+    - title: Weak MFA enforcement for privileged accounts
+      description: >-
+        Several administrator and service accounts can authenticate with
+        password only, bypassing multi-factor authentication. A compromised
+        credential for one of these accounts would give an attacker direct
+        access to production infrastructure.
+      mitigation_action_plan: >-
+        Enforce MFA at the identity provider level for all accounts in the
+        Administrators and Domain Admins groups, with no exceptions. Audit
+        conditional access policies monthly to catch newly created accounts
+        that fall outside enforcement.
+    - title: Sensitive data exposed in misconfigured cloud storage
+      description: >-
+        A cloud storage bucket containing customer records was found
+        configured for public read access. While no confirmed unauthorized
+        access has been detected, the exposure window and lack of access
+        logging make it impossible to fully rule out data exfiltration.
+      mitigation_action_plan: >-
+        Restrict the bucket to private access immediately and enable access
+        logging retroactively where possible. Deploy automated configuration
+        scanning across all cloud storage to flag public-access buckets
+        within minutes of creation.
+    - title: "Insider threat: unauthorized access to production data"
+      description: >-
+        A former contractor's access credentials remained active for three
+        weeks after their engagement ended, during which production database
+        logs show several queries outside their normal working pattern.
+        Offboarding procedures did not trigger timely access revocation.
+      mitigation_action_plan: >-
+        Revoke the identified credentials immediately and review the access
+        logs with the data owner to confirm scope of exposure. Automate
+        access revocation as part of the HR offboarding workflow so it no
+        longer depends on a manual ticket.
+
+  Third-Party:
+    - title: Critical vendor lacks SOC 2 attestation
+      description: >-
+        The vendor hosting our core payment processing integration has not
+        provided a current SOC 2 Type II report despite repeated requests,
+        leaving us unable to independently verify their control environment
+        for a system that touches financial data.
+      mitigation_action_plan: >-
+        Escalate the attestation request to the vendor's account team with a
+        hard deadline, and commission an independent security questionnaire
+        in the interim. If attestation isn't provided within the quarter,
+        begin evaluating alternative vendors.
+    - title: No exit plan for sole-sourced cloud hosting provider
+      description: >-
+        All production workloads run on a single cloud provider with no
+        documented migration path, contractual data-portability guarantees,
+        or tested backup export process. A prolonged outage or contract
+        dispute would leave the organization with no fallback.
+      mitigation_action_plan: >-
+        Document a formal exit strategy covering data export formats,
+        estimated migration timelines, and dependency mapping. Test a partial
+        workload migration to a secondary provider to validate the plan is
+        actually executable.
+    - title: Vendor security questionnaire responses unverified
+      description: >-
+        Vendor-submitted security questionnaires are filed without
+        independent verification of the claims made, relying entirely on
+        self-attestation. Several vendors handling sensitive data have not
+        been asked to provide supporting evidence for their answers.
+      mitigation_action_plan: >-
+        Introduce a risk-tiered verification process requiring supporting
+        evidence (certifications, penetration test summaries) for any vendor
+        above the low-risk tier. Prioritize verification for the vendors
+        already flagged as handling sensitive data.
+    - title: Fourth-party subcontractor risk not assessed
+      description: >-
+        A key vendor subcontracts part of its service delivery to a fourth
+        party that has never been identified or assessed. Our risk register
+        only covers direct vendor relationships, creating a blind spot for a
+        dependency that could materially affect service continuity.
+      mitigation_action_plan: >-
+        Request a full subcontractor disclosure from the vendor as part of
+        the next contract review, and extend the vendor risk assessment
+        questionnaire to cover fourth-party relationships. Add a contractual
+        notification clause for future subcontracting changes.
+
+  Legal & Regulatory:
+    - title: Non-compliance with NIS2 incident reporting timelines
+      description: >-
+        Current incident response procedures do not reflect NIS2's 24-hour
+        early-warning and 72-hour detailed-notification requirements. A
+        qualifying incident today would likely miss the mandatory reporting
+        window to the competent authority.
+      mitigation_action_plan: >-
+        Update the incident response runbook with explicit NIS2 reporting
+        triggers and timelines, and assign a named owner responsible for
+        regulator notification. Run a tabletop exercise simulating a
+        reportable incident to validate the updated timeline is achievable.
+    - title: GDPR data subject request backlog exceeding SLA
+      description: >-
+        The queue of pending data subject access and erasure requests has
+        grown to the point where several requests are past the one-month
+        statutory response deadline, exposing the organization to regulatory
+        complaints.
+      mitigation_action_plan: >-
+        Temporarily reassign staff to clear the backlog within two weeks,
+        prioritizing the most overdue requests first. Implement a
+        self-service request-tracking dashboard so future SLA breaches are
+        visible before they occur.
+    - title: Outdated data processing agreements with sub-processors
+      description: >-
+        Several data processing agreements with sub-processors predate the
+        current GDPR guidance and lack required clauses on sub-processor
+        liability and international transfer mechanisms, creating a
+        compliance gap in the processing chain.
+      mitigation_action_plan: >-
+        Issue updated DPA templates to all affected sub-processors with a
+        60-day signature deadline. Flag any sub-processor that doesn't
+        countersign in time for contract review by Legal.
+    - title: Missing records of processing activities (Art. 30 GDPR)
+      description: >-
+        Not all personal data processing activities are documented in the
+        Article 30 record, particularly for newer marketing and analytics
+        tools adopted outside the formal procurement process. This leaves
+        gaps that would surface immediately under a regulatory audit.
+      mitigation_action_plan: >-
+        Run a data discovery exercise across all departments to identify
+        undocumented processing activities, then update the Article 30
+        record. Add a "new tool" intake step that requires processing
+        documentation before adoption.
+
+  Financial:
+    - title: Currency exposure from unhedged foreign supplier contracts
+      description: >-
+        A material share of supplier payments are denominated in foreign
+        currency with no hedging instruments in place, leaving quarterly
+        costs exposed to exchange-rate volatility that could materially
+        affect margins.
+      mitigation_action_plan: >-
+        Engage Treasury to evaluate forward contracts or currency options
+        covering the largest exposures. Set a policy threshold above which
+        future foreign-currency contracts require a hedging decision before
+        signature.
+    - title: Budget overrun on multi-year infrastructure project
+      description: >-
+        The infrastructure modernization project is tracking 22% over its
+        approved budget at the halfway milestone, driven by scope additions
+        that were not run through change control. Continuing at the current
+        burn rate would exhaust the full-year budget by Q3.
+      mitigation_action_plan: >-
+        Freeze new scope additions pending a formal change-control review,
+        and re-baseline the budget against the current approved scope.
+        Report burn rate to the steering committee monthly for the remainder
+        of the project.
+    - title: Delayed customer payments impacting cash flow
+      description: >-
+        Average days-sales-outstanding has increased for three consecutive
+        quarters, driven by a handful of large accounts routinely paying
+        past terms. The trend is beginning to strain short-term cash flow
+        planning.
+      mitigation_action_plan: >-
+        Introduce tiered payment-term enforcement, including early-payment
+        incentives and late-payment penalties for the affected accounts.
+        Escalate persistently late accounts to Finance leadership for a
+        direct conversation.
+    - title: Inaccurate revenue recognition in new billing system
+      description: >-
+        The billing system migrated earlier this year has produced several
+        instances of revenue being recognized in the wrong period,
+        discovered during month-end close reconciliation. The root cause has
+        not yet been isolated to a specific configuration issue.
+      mitigation_action_plan: >-
+        Engage the billing vendor to investigate the recognition-timing
+        discrepancies and apply a fix, with manual reconciliation as an
+        interim control. Add an automated recognition-period check to the
+        month-end close checklist.
+
+  Operational:
+    - title: Single point of failure in core order-processing system
+      description: >-
+        The order-processing pipeline depends on a single application server
+        with no automatic failover. An unplanned outage would halt order
+        intake entirely until the server is manually restored, with no
+        documented recovery time estimate.
+      mitigation_action_plan: >-
+        Deploy a redundant application instance behind a load balancer with
+        automatic failover, and document a recovery runbook with a target
+        recovery time. Test the failover under simulated failure conditions
+        before closing this risk.
+    - title: Inadequate backup and disaster recovery testing
+      description: >-
+        Backups run on schedule, but the last full disaster recovery test
+        was over a year ago and did not include the systems added since
+        then. There is no verified confidence that a full recovery would
+        actually succeed within the target recovery time objective.
+      mitigation_action_plan: >-
+        Schedule a full DR test covering all current production systems,
+        including the ones added since the last test. Document actual
+        recovery times against the target RTO and address any gaps found.
+    - title: Key-person dependency on undocumented legacy process
+      description: >-
+        A critical batch reconciliation process is understood and operated
+        by a single team member, with no written runbook. Their extended
+        absence would leave the organization unable to run the process
+        without significant delay.
+      mitigation_action_plan: >-
+        Document the process end-to-end in a runbook and cross-train at
+        least one additional team member. Schedule a supervised handoff run
+        to confirm the documentation is sufficient on its own.
+    - title: Manual data entry errors in financial reporting pipeline
+      description: >-
+        Several stages of the monthly financial reporting pipeline still
+        rely on manual re-entry of data between systems, and post-close
+        reviews have identified recurring transcription errors that require
+        correction after the fact.
+      mitigation_action_plan: >-
+        Automate the manual re-entry steps with a direct system integration
+        where feasible, starting with the highest-error stage. Add a
+        reconciliation check comparing source and destination totals before
+        reports are finalized.
+
+  Reputational:
+    - title: Public disclosure risk from unresolved data breach
+      description: >-
+        A previously contained data breach remains unresolved pending
+        forensic confirmation of scope, and public disclosure obligations
+        may be triggered once the assessment concludes. Communications
+        materials have not yet been prepared.
+      mitigation_action_plan: >-
+        Prepare draft disclosure communications in parallel with the
+        forensic investigation so the organization isn't drafting under
+        deadline pressure. Brief the executive team and legal counsel on
+        disclosure triggers before the assessment concludes.
+    - title: Negative press exposure from vendor's ethical violations
+      description: >-
+        A key vendor has been named in press coverage regarding labor
+        practices at one of its facilities. Because the vendor relationship
+        is publicly associated with our brand through co-marketing,
+        negative coverage carries reputational spillover risk.
+      mitigation_action_plan: >-
+        Request a formal response and remediation plan from the vendor, and
+        review the co-marketing agreement for an ethics-related termination
+        clause. Prepare a holding statement in case media inquiries are
+        directed at the organization.
+    - title: Customer trust erosion from repeated service outages
+      description: >-
+        Three unplanned service outages in the past quarter have generated a
+        visible increase in customer complaints and social media commentary
+        questioning platform reliability, with early signs of impact on
+        renewal conversations.
+      mitigation_action_plan: >-
+        Publish a public reliability roadmap addressing the root causes
+        identified in each outage's post-mortem. Proactively reach out to
+        at-risk renewal accounts with a direct update from account
+        management.
+
+  Compliance:
+    - title: ISO 27001 surveillance audit findings not remediated
+      description: >-
+        The most recent ISO 27001 surveillance audit raised two minor
+        nonconformities related to access review evidence, and the
+        remediation deadline committed to the certification body has
+        already passed without closure.
+      mitigation_action_plan: >-
+        Assign an owner to close each nonconformity with documented
+        evidence, and submit the closure report to the certification body
+        immediately. Add a tracker for future audit findings with automatic
+        deadline reminders.
+    - title: Access reviews not performed on required quarterly cadence
+      description: >-
+        Quarterly access reviews for systems handling sensitive data have
+        slipped to an ad hoc schedule, with the most recent review over five
+        months overdue. This increases the risk of stale or excessive
+        access going undetected.
+      mitigation_action_plan: >-
+        Run the overdue access review immediately and revoke any access
+        that fails to be re-certified. Automate a calendar-triggered review
+        workflow so future reviews can't silently lapse.
+    - title: Security awareness training completion below policy threshold
+      description: >-
+        Completion of mandatory annual security awareness training currently
+        stands at 68%, below the 95% threshold set by policy. Non-completion
+        is concentrated in a handful of departments with limited manager
+        follow-up.
+      mitigation_action_plan: >-
+        Escalate outstanding completions to department managers with a
+        two-week deadline, and copy the completion report to leadership.
+        Enable automated reminder emails going forward so completion
+        doesn't rely on manual chasing.

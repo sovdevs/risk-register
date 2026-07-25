@@ -28,6 +28,11 @@ Titles/categories/departments stay English (GRC domain vocabulary); only
 owner names are mixed-locale, reflecting a multinational org rather than a
 localized build of the app.
 
+All seeded content (departments, categories, risk titles/descriptions,
+mitigation action plans) lives in [risks/seed_data.yaml](risks/seed_data.yaml),
+not in the command itself — edit that file (or paste in LLM-generated text)
+without touching `seed_demo.py`.
+
 ## Cycle 1 (done)
 
 `Department`, `RiskCategory`, `Risk` models + admin CRUD.
@@ -39,4 +44,15 @@ residual), shown inline on the Risk admin page. `seed_demo` management
 command added, generating curated risk titles with category-biased
 inherent scores (Cyber/Third-Party skew higher) rather than uniform noise.
 
+## Cycle 3 (done)
 
+`Mitigation` model (treatment type, action plan, owner, due date, status,
+computed `is_overdue`), shown inline on the Risk admin page. `seed_demo`
+now gives any risk in `mitigating`/`monitoring`/`closed` status a
+mitigation, and once that mitigation is complete, a residual
+`RiskAssessment` showing the reduced score. Seed content (risk
+descriptions, mitigation action plans) moved out of the command and into
+`risks/seed_data.yaml` — real, hand-written text instead of Faker
+gibberish.
+
+No audit trail or dashboard yet — that's cycles 4+.

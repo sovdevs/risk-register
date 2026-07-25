@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Department(models.Model):
@@ -84,3 +85,37 @@ class RiskAssessment(models.Model):
 
     def __str__(self):
         return f"{self.risk.title} — {self.get_kind_display()} ({self.score})"
+
+
+class Mitigation(models.Model):
+    class TreatmentType(models.TextChoices):
+        ACCEPT = "accept", "Accept"
+        MITIGATE = "mitigate", "Mitigate"
+        TRANSFER = "transfer", "Transfer"
+        AVOID = "avoid", "Avoid"
+
+    class Status(models.TextChoices):
+        NOT_STARTED = "not_started", "Not started"
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETE = "complete", "Complete"
+
+    risk = models.ForeignKey(Risk, on_delete=models.CASCADE, related_name="mitigations")
+    treatment_type = models.CharField(max_length=20, choices=TreatmentType.choices)
+    action_plan = models.TextField()
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="owned_mitigations"
+    )
+    due_date = models.DateField()
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.NOT_STARTED
+    )
+
+    class Meta:
+        ordering = ["due_date"]
+
+    @property
+    def is_overdue(self):
+        return self.status != self.Status.COMPLETE and self.due_date < timezone.localdate()
+
+    def __str__(self):
+        return f"{self.get_treatment_type_display()} — {self.risk.title}"

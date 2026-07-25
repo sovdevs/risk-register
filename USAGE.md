@@ -29,6 +29,11 @@ Seeding is idempotent for departments/categories (matched by name) and skips
 risks that already exist by title, so re-running without `--flush` just fills
 in anything missing rather than duplicating.
 
+All seeded content — department/category names, risk titles, descriptions,
+mitigation action plans — lives in `risks/seed_data.yaml`, not in the
+command. Edit that file to change what gets seeded; no Python changes
+needed.
+
 ## Migrations (after editing models.py)
 
 ```bash
