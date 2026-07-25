@@ -11,9 +11,12 @@ cycles rather than all at once, to re-familiarize with Django along the way.
 - `uv` for env/dependency management
 - SQLite for local dev (swapping to Postgres later is a one-line
   `DATABASES` change — not needed for a local demo)
-- `django-simple-history` for audit trail (added in cycle 4)
-- Chart.js via CDN for the heatmap/trend visuals (added in cycle 6)
-- Faker + a custom management command for synthetic demo data (cycle 5)
+- `django-simple-history` for audit trail (added in cycle 7)
+- Plain HTML/CSS grid for the heatmap (cycle 4, done) — color-banded risk
+  matrices are conventionally a grid, not a chart; Chart.js via CDN is
+  still the plan for the trend line chart (cycle 6)
+- Faker + a custom management command for synthetic demo data (added in
+  cycle 2, content moved to `risks/seed_data.yaml` in cycle 3)
 - Django admin as the primary data-entry UI — no separate CRUD UI needed
 - DRF only if a cycle turns out to need a JSON endpoint for a chart;
   not assumed upfront
@@ -43,22 +46,36 @@ cycles rather than all at once, to re-familiarize with Django along the way.
 - History: `django-simple-history` on Risk, RiskAssessment, Mitigation
 
 ## Feature cycles
-1. **Scaffold** — project + `risks` app, Risk/RiskCategory/Department
+1. **Scaffold** (done) — project + `risks` app, Risk/RiskCategory/Department
    models, admin registration, migrations. Runnable: CRUD via `/admin/`.
-2. **RiskAssessment** — likelihood/impact/score, inline in Risk admin.
-3. **Mitigation** — treatment type, action plan, residual assessment
-   linkage.
-4. **Audit trail** — wire up `django-simple-history` on the core models.
-5. **Synthetic data** — `manage.py seed_demo`, Faker, weighted (not
-   uniform) distributions, a deliberate narrative (e.g. Third-Party risks
-   skew high and under-mitigated) rather than pure noise.
-6. **Heatmap dashboard** — 5×5 likelihood × impact grid, Chart.js, risk
-   count per cell.
-7. **Filterable register view** — list page with status/category/
+2. **RiskAssessment** (done) — likelihood/impact/score, inline in Risk
+   admin. `manage.py seed_demo` introduced here (originally planned as its
+   own later cycle, front-loaded so there was data to look at early).
+3. **Mitigation** (done) — treatment type, action plan, residual assessment
+   linkage. Seed content (departments/categories/risk titles/descriptions/
+   action plans) extracted out of the command into `risks/seed_data.yaml`,
+   with real hand-written descriptions instead of Faker text.
+
+   — **Milestone 1: basic static admin app.** Full data model, all
+   relationships, realistic seeded content — but everything so far is just
+   Django admin's auto-generated CRUD. Nothing yet is bespoke to "risk
+   register" as opposed to any other set of models. Cycles 4+ are what
+   turn this into an actual product.
+
+4. **Heatmap dashboard** (done) — 5×5 likelihood × impact grid, risk count
+   per cell, color-banded (Low/Medium/High/Critical). First custom
+   view/template, not admin. Plotted from each risk's most recent
+   assessment (residual once mitigated). Plain HTML/CSS grid rather than
+   Chart.js — that's still the plan for the trend chart in cycle 6.
+   (Moved up from its original slot after cycle 3 — the visible payoff
+   outweighs sequencing purity; audit trail below is invisible
+   infrastructure by comparison.)
+5. **Filterable register view** — list page with status/category/
    department filters.
-8. **Trend + overdue widgets** — aggregate risk score over time from
+6. **Trend + overdue widgets** — aggregate risk score over time from
    assessment history; overdue mitigations list.
-9. **Polish** — README, `pyproject.toml` cleanup, light styling pass.
+7. **Audit trail** — wire up `django-simple-history` on the core models.
+8. **Polish** — README, `pyproject.toml` cleanup, light styling pass.
 
 Each cycle ends in a state where `uv run python manage.py runserver` works
 and the new feature is visible/checkable.

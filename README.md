@@ -55,4 +55,22 @@ descriptions, mitigation action plans) moved out of the command and into
 `risks/seed_data.yaml` — real, hand-written text instead of Faker
 gibberish.
 
-No audit trail or dashboard yet — that's cycles 4+.
+**Milestone 1: basic static admin app.** Full data model and realistic
+seeded content, but everything so far is just Django admin's
+auto-generated CRUD — nothing yet is bespoke to a risk register as opposed
+to any other set of models.
+
+## Cycle 4 (done)
+
+Risk heatmap dashboard at `/` — first custom view/template, not admin.
+5×5 likelihood × impact grid (Low/Medium/High/Critical color bands),
+each risk plotted by its *most recent* assessment (so a completed
+mitigation's residual score shows instead of the original inherent one),
+cell hover shows the risk titles in that cell. Plain HTML/CSS grid rather
+than Chart.js — a color-banded matrix is how risk heatmaps actually look
+in the GRC world, and it needed no extra dependency; Chart.js is still
+the plan for the trend line chart in a later cycle. `risks/urls.py`
+introduced, `config/urls.py` now includes it at the root path.
+
+No filters, trends, overdue widgets, or audit trail yet — that's cycles
+5+. See [SPEC.md](SPEC.md) for the full roadmap.

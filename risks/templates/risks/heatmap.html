@@ -1,0 +1,72 @@
+{% extends "risks/base.html" %}
+
+{% block title %}Risk Heatmap — Risk Register{% endblock %}
+
+{% block content %}
+<h1>Risk Heatmap</h1>
+<p style="color: var(--muted);">
+  {{ assessed_risks }} of {{ total_risks }} risks have an assessment, plotted
+  by likelihood × impact from each risk's most recent assessment — residual
+  where a mitigation has completed, inherent otherwise.
+</p>
+
+<style>
+  .heatmap { border-collapse: collapse; margin-top: 1rem; }
+  .heatmap th, .heatmap td {
+    border: 1px solid var(--border);
+    width: 5.5rem;
+    height: 4rem;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .heatmap th { font-weight: 600; font-size: 0.85rem; color: var(--muted); }
+  .axis-label { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+  .cell-count { font-size: 1.4rem; font-weight: 600; color: #111827; }
+  .cell-score { font-size: 0.7rem; opacity: 0.7; color: #111827; }
+  .band-low { background: var(--low); }
+  .band-medium { background: var(--medium); }
+  .band-high { background: var(--high); }
+  .band-critical { background: var(--critical); }
+  .legend { margin-top: 1.5rem; font-size: 0.85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; margin-right: 1.25rem; }
+  .legend .swatch { width: 0.8rem; height: 0.8rem; border-radius: 2px; margin-right: 0.4rem; display: inline-block; }
+</style>
+
+<table class="heatmap">
+  <thead>
+    <tr>
+      <th></th>
+      <th colspan="5">Impact →</th>
+    </tr>
+    <tr>
+      <th class="axis-label">Likelihood ↑</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>4</th>
+      <th>5</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in grid %}
+    <tr>
+      <th>{{ row.likelihood }}</th>
+      {% for cell in row.cells %}
+      <td class="band-{{ cell.band }}"
+          {% if cell.risk_titles %}title="{{ cell.risk_titles|join:", " }}"{% endif %}>
+        <div class="cell-count">{{ cell.count }}</div>
+        <div class="cell-score">score {{ cell.score }}</div>
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="legend">
+  <span><span class="swatch band-low"></span>Low (1–4)</span>
+  <span><span class="swatch band-medium"></span>Medium (5–9)</span>
+  <span><span class="swatch band-high"></span>High (10–15)</span>
+  <span><span class="swatch band-critical"></span>Critical (16–25)</span>
+</div>
+{% endblock %}
