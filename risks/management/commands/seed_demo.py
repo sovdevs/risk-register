@@ -125,6 +125,9 @@ class Command(BaseCommand):
             Risk.objects.all().delete()
             RiskCategory.objects.all().delete()
             Department.objects.all().delete()
+            # is_superuser=False, is_staff=False excludes real accounts like
+            # your own createsuperuser login — only seeded demo owners match.
+            get_user_model().objects.filter(is_superuser=False, is_staff=False).delete()
 
         departments = [Department.objects.get_or_create(name=n)[0] for n in DEPARTMENTS]
 
@@ -181,11 +184,20 @@ class Command(BaseCommand):
         )
 
     def _seed_owners(self):
+        # Mixed German/American names, not a --locale toggle: this is a
+        # multinational org, not a localized build of the app. Titles,
+        # categories, and departments stay English regardless.
         User = get_user_model()
+        en_fake = Faker("en_US")
+        de_fake = Faker("de_DE")
+        en_fake.seed_instance(42)
+        de_fake.seed_instance(43)
+
         owners = []
-        for _ in range(8):
-            first, last = fake.first_name(), fake.last_name()
-            username = f"{first}.{last}".lower()
+        for i in range(8):
+            locale_fake = de_fake if i % 2 == 0 else en_fake
+            first, last = locale_fake.first_name(), locale_fake.last_name()
+            username = self._slug(f"{first}.{last}")
             user, created = User.objects.get_or_create(
                 username=username,
                 defaults={
@@ -199,3 +211,10 @@ class Command(BaseCommand):
                 user.save()
             owners.append(user)
         return owners
+
+    _UMLAUT_MAP = str.maketrans(
+        {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
+    )
+
+    def _slug(self, value):
+        return value.translate(self._UMLAUT_MAP).encode("ascii", "ignore").decode("ascii").lower()
