@@ -1,0 +1,64 @@
+{% extends "risks/base.html" %}
+
+{% block title %}Ask AI — Risk Register{% endblock %}
+
+{% block content %}
+<h1>Ask AI</h1>
+<p style="color: var(--muted); max-width: 40rem;">
+  Ask a question in plain English — the model is given every current risk
+  (title, category, department, owner, status, current score, description,
+  and mitigation plan where one exists) and instructed to answer only from
+  that data.
+</p>
+
+<style>
+  .ask-form { max-width: 40rem; margin-top: 1.5rem; display: flex; gap: 0.75rem; }
+  .ask-form input {
+    flex: 1; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0.55rem 0.7rem; font-size: 0.95rem; font-family: inherit;
+  }
+  .ask-form button {
+    border: 1px solid var(--border); background: transparent; color: var(--fg);
+    border-radius: 4px; padding: 0.55rem 1.2rem; font-size: 0.9rem; cursor: pointer;
+  }
+  .qa-pair { max-width: 40rem; margin-top: 2rem; }
+  .qa-question {
+    font-size: 0.95rem; font-weight: 600; margin: 0 0 0.5rem;
+  }
+  .qa-answer {
+    padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 6px;
+    line-height: 1.55; font-size: 0.95rem; white-space: pre-line;
+  }
+  .qa-error { color: var(--critical); font-size: 0.9rem; }
+  .examples { margin-top: 2rem; font-size: 0.85rem; color: var(--muted); max-width: 40rem; }
+</style>
+
+<form class="ask-form" method="post">
+  {% csrf_token %}
+  <input type="text" name="question" placeholder="e.g. What are our top open Cyber risks?" value="{{ question }}" required autofocus>
+  <button type="submit">Ask</button>
+</form>
+
+{% if question and answer %}
+<div class="qa-pair">
+  <p class="qa-question">{{ question }}</p>
+  <p class="qa-answer">{{ answer }}</p>
+</div>
+{% elif question and error %}
+<div class="qa-pair">
+  <p class="qa-question">{{ question }}</p>
+  <p class="qa-error">
+    {{ error }}
+    {% if "AI Settings" in error %}
+      <a href="{% url 'risks:ai_settings' %}">Go to AI Settings</a>.
+    {% endif %}
+  </p>
+</div>
+{% else %}
+<div class="examples">
+  Try: "What are our top open Cyber risks?" · "Which mitigations are
+  overdue?" · "What's the plan for the ransomware risk?" · "Summarize our
+  Third-Party risk exposure."
+</div>
+{% endif %}
+{% endblock %}

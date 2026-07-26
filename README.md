@@ -196,5 +196,22 @@ that risk's admin change page. Verified live end-to-end in the browser
 with a real API call — draft quality is genuinely good, specific to the
 title/category given, not generic filler.
 
-Cycle 12 (AI Q&A over the register) is scoped in [SPEC.md](SPEC.md) but
-not yet built.
+## Cycle 12 (done) — AI Q&A
+
+A chat-style page at `/ai/ask/`: type a question in plain English, get an
+answer grounded in the actual register. `_register_context()` builds a
+full text dump of every current risk (title, category, department,
+owner, status, current score, description, and mitigation plan where one
+exists — ~16.5K characters for 28 risks) and passes it as context with
+every question; no retrieval/filtering logic needed at this data volume.
+The system prompt instructs the model to answer only from the provided
+data and say so plainly if it can't. Verified live: correctly listed all
+7 overdue mitigations with the right due dates and picked out the most
+overdue one; correctly declined to answer a question about data that
+isn't tracked (insurance coverage) rather than guessing.
+
+This completes Phase 2 as scoped in [SPEC.md](SPEC.md). The app now has:
+data model + admin (cycles 1-3), heatmap/register/trend/overdue
+dashboards (cycles 4-6), audit trail (cycle 7), polish (cycle 8), and a
+full BYOK AI layer — settings, portfolio insight, draft-assist, and Q&A
+(cycles 9-12).

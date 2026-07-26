@@ -121,10 +121,16 @@ directly — no vector DB/embeddings needed.
     real choices regardless of what the model returns. Saving creates
     Risk + optional inherent RiskAssessment + optional Mitigation
     (90-day default due date), redirects to the admin change page.
-12. **AI Q&A** — a chat-style page answering natural-language questions
-    ("what are our top open Cyber risks?") against the current register,
-    passing matching rows as context and instructing the model to answer
-    only from provided data.
+12. **AI Q&A** (done) — chat-style page at `/ai/ask/`. `_register_context()`
+    dumps every current risk (title/category/department/owner/status/
+    score/description/mitigation) as text, passed with every question —
+    no retrieval needed at this volume. Verified live: correctly listed
+    all 7 overdue mitigations with right due dates, correctly declined an
+    out-of-scope question instead of guessing.
+
+    — **Phase 2 complete.** Full BYOK AI layer shipped: settings,
+    portfolio insight, draft-assist, Q&A. Next: the second project
+    (`controlmappingcoverage`).
 
 ## Non-goals
 No multi-tenant orgs, no auth beyond Django's built-in, no deployment

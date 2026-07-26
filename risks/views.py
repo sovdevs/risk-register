@@ -365,3 +365,71 @@ def new_risk(request):
         "today": timezone.localdate(),
     }
     return render(request, "risks/new_risk.html", context)
+
+
+AI_ASK_SYSTEM_PROMPT = (
+    "You are a GRC risk analyst assistant answering questions about this "
+    "organization's risk register. Answer ONLY using the data provided — "
+    "do not invent risks, scores, owners, or details not present in it. "
+    "If the question can't be answered from the data, say so plainly. "
+    "Keep answers concise. Plain prose only, no markdown."
+)
+
+
+def _register_context():
+    # Full context, not a retrieval subset — dataset is small enough
+    # (dozens of risks) that passing everything is simpler and more
+    # reliable than trying to guess which rows are relevant to a given
+    # question.
+    latest_by_risk = _latest_assessments_by_risk()
+    risks = (
+        Risk.objects.select_related("category", "department", "owner")
+        .prefetch_related("mitigations")
+        .order_by("-date_identified")
+    )
+
+    blocks = []
+    for risk in risks:
+        assessment = latest_by_risk.get(risk.id)
+        score = assessment.score if assessment else "unassessed"
+        lines = [
+            f"Risk: {risk.title}",
+            f"Category: {risk.category.name} | Department: {risk.department.name} "
+            f"| Owner: {risk.owner.get_full_name() or risk.owner.username}",
+            f"Status: {risk.get_status_display()} | Current score: {score}",
+            f"Description: {risk.description}",
+        ]
+        mitigation = risk.mitigations.first()
+        if mitigation:
+            overdue = " (OVERDUE)" if mitigation.is_overdue else ""
+            lines.append(
+                f"Mitigation: {mitigation.get_treatment_type_display()}, "
+                f"status {mitigation.get_status_display()}, due "
+                f"{mitigation.due_date}{overdue} — {mitigation.action_plan}"
+            )
+        blocks.append("\n".join(lines))
+
+    return "\n\n".join(blocks)
+
+
+def ai_ask(request):
+    question = ""
+    answer = None
+    error = None
+    if request.method == "POST":
+        question = request.POST.get("question", "").strip()
+        if question:
+            try:
+                user_prompt = (
+                    f"Risk register data:\n{_register_context()}\n\n"
+                    f"Question: {question}"
+                )
+                answer = ai.generate_text(AI_ASK_SYSTEM_PROMPT, user_prompt)
+            except ai.AIError as exc:
+                error = str(exc)
+
+    return render(
+        request,
+        "risks/ai_ask.html",
+        {"question": question, "answer": answer, "error": error},
+    )
