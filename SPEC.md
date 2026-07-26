@@ -98,6 +98,35 @@ cycles rather than all at once, to re-familiarize with Django along the way.
 Each cycle ends in a state where `uv run python manage.py runserver` works
 and the new feature is visible/checkable.
 
+## Phase 2: AI features
+BYOK (bring your own key) OpenAI integration. Dataset is small enough
+(dozens of rows) that every feature just passes relevant rows as context
+directly — no vector DB/embeddings needed.
+
+9. **AI settings** (done) — `AISettings` singleton model (api_key, model
+   name as free text — no hardcoded model ID). `/ai/settings/` page,
+   password input, masked on redisplay (`••••••••1234`), blank submit
+   keeps the existing key. `risks/ai.py` wraps the OpenAI client behind
+   `generate_text()`, raising `AIError` for "no key" / "request failed".
+   Not in Django admin — admin doesn't mask CharFields.
+10. **AI portfolio insight** (done) — "Generate Insight" button on the
+    heatmap page (`/`), POST-triggered. Builds a grounded text summary
+    (top 5 risks by score, trend first-vs-last-month, up to 5 overdue
+    mitigations) and asks for a 3-4 sentence executive summary. Read-only.
+11. **AI draft-assist** (done) — custom "New Risk" page (`/new/`, not
+    admin). "Draft with AI" (plain fetch) calls `/ai/draft/`
+    (`generate_json`, structured OpenAI response), fills form fields
+    client-side, nothing saved until "Save Risk". Server-side validation
+    clamps likelihood/impact to 1-5 and checks treatment_type against
+    real choices regardless of what the model returns. Saving creates
+    Risk + optional inherent RiskAssessment + optional Mitigation
+    (90-day default due date), redirects to the admin change page.
+12. **AI Q&A** — a chat-style page answering natural-language questions
+    ("what are our top open Cyber risks?") against the current register,
+    passing matching rows as context and instructing the model to answer
+    only from provided data.
+
 ## Non-goals
 No multi-tenant orgs, no auth beyond Django's built-in, no deployment
-config — this is a local dev demo only.
+config — this is a local dev demo only. No vector search/embeddings — not
+needed at this data volume.

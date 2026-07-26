@@ -152,6 +152,49 @@ into the shared `base.html`, this README reorganized with an overview up
 top instead of requiring a read through all 8 cycles to know what the app
 does.
 
-This closes out the planned roadmap in [SPEC.md](SPEC.md). Next up: the
-second project (`controlmappingcoverage`), and exploring where an AI
-feature could add real value on top of either app.
+This closed out the planned roadmap in [SPEC.md](SPEC.md). Phase 2 below
+is new scope: AI features on top of the finished app.
+
+## Cycle 9 (done) — AI settings
+
+`AISettings` singleton model (`api_key`, `model` — free text, not a
+hardcoded choice, so whatever model the account has access to works).
+`/ai/settings/` page to edit it — API key uses a password input and is
+never redisplayed in full (masked as `••••••••1234`, last 4 chars only);
+leaving it blank on save keeps the existing key rather than clearing it.
+`risks/ai.py` wraps the OpenAI client behind a single `generate_text()`
+call, raising a friendly `AIError` for both "no key configured" and
+"request failed" — verified both paths directly (missing key, and a
+real 401 from an intentionally-invalid key) render a clean message
+instead of a crash. Not registered in Django admin on purpose — admin
+doesn't mask `CharField`s, which would defeat the point of the dedicated
+page.
+
+## Cycle 10 (done) — AI portfolio insight
+
+A "Generate Insight" button on the heatmap page (`/`). POST-triggered
+(not on page load — costs a real API call), it builds a text summary of
+the actual current data — top 5 risks by score, portfolio average score
+trend (first vs. last month with data), and up to 5 overdue mitigations
+— and asks the model for a 3-4 sentence executive summary grounded in
+that data. Read-only, no write path.
+
+## Cycle 11 (done) — AI draft-assist
+
+A custom "New Risk" page at `/new/` (not admin — admin isn't easily
+extensible with a custom button without deeper template overrides).
+Fill in a title + category, optionally hit "Draft with AI" (plain fetch,
+no framework) to call `/ai/draft/`, which asks the model for a JSON
+object (description, likelihood, impact, treatment_type,
+mitigation_action_plan) and fills the form fields client-side — nothing
+is saved until you hit "Save Risk". Likelihood/impact are clamped to 1-5
+and treatment_type is validated against the real choices server-side, in
+case the model returns something out of range. Saving creates the Risk
+plus, if filled in, an inherent `RiskAssessment` and a `Mitigation`
+(default due date: 90 days out if not specified) — then redirects to
+that risk's admin change page. Verified live end-to-end in the browser
+with a real API call — draft quality is genuinely good, specific to the
+title/category given, not generic filler.
+
+Cycle 12 (AI Q&A over the register) is scoped in [SPEC.md](SPEC.md) but
+not yet built.

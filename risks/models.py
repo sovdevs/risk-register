@@ -123,3 +123,26 @@ class Mitigation(models.Model):
 
     def __str__(self):
         return f"{self.get_treatment_type_display()} — {self.risk.title}"
+
+
+class AISettings(models.Model):
+    # Singleton: always pk=1, loaded via AISettings.load(). No provider
+    # field yet — OpenAI-only for now, per how this was scoped; model is
+    # free text rather than a hardcoded choice, since "the current best
+    # small model" changes and we shouldn't bake in an assumption about
+    # which one is valid on the user's account.
+    api_key = models.CharField(max_length=200, blank=True)
+    model = models.CharField(max_length=100, blank=True, default="gpt-4o-mini")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "AI settings"
+        verbose_name_plural = "AI settings"
+
+    def __str__(self):
+        return "AI Settings"
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

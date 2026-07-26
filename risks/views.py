@@ -1,10 +1,14 @@
+import json
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 
-from django.shortcuts import render
+from django.contrib.auth import get_user_model
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from .models import Department, Mitigation, Risk, RiskAssessment, RiskCategory
+from . import ai
+from .models import AISettings, Department, Mitigation, Risk, RiskAssessment, RiskCategory
 
 SCORE_BANDS = [
     (4, "low"),
@@ -89,6 +93,48 @@ def _overdue_mitigations():
     return overdue
 
 
+def _build_portfolio_context(grid, trend_data, overdue_mitigations):
+    # Grounds the AI insight prompt in the same data the page shows —
+    # real risk titles/scores/dates, not a description of the UI. Keeps
+    # the model from having to infer anything it could get wrong.
+    lines = ["Top risks by current score:"]
+    cells = sorted(
+        (c for row in grid for c in row["cells"] if c["count"]),
+        key=lambda c: c["score"],
+        reverse=True,
+    )
+    for cell in cells[:5]:
+        for title in cell["risk_titles"]:
+            lines.append(f"- {title} (score {cell['score']}, {cell['band']})")
+
+    scores = [s for s in trend_data["scores"] if s is not None]
+    if len(scores) >= 2:
+        lines.append(
+            f"\nPortfolio average score trend: {scores[0]} "
+            f"({trend_data['labels'][0]}) -> {scores[-1]} "
+            f"({trend_data['labels'][-1]})."
+        )
+
+    lines.append(f"\nOverdue mitigations: {len(overdue_mitigations)}")
+    for mitigation in overdue_mitigations[:5]:
+        lines.append(
+            f"- {mitigation.risk.title} ({mitigation.get_treatment_type_display()}, "
+            f"{mitigation.days_overdue} days overdue)"
+        )
+
+    return "\n".join(lines)
+
+
+AI_INSIGHT_SYSTEM_PROMPT = (
+    "You are a GRC risk analyst assistant. Given this risk portfolio data, "
+    "write a concise 3-4 sentence executive summary highlighting the "
+    "biggest concerns and any notable trend. Reference specific risk names "
+    "and numbers from the data provided. Do not invent risks not listed. "
+    "Plain prose only — no markdown formatting (no **bold**, no bullet "
+    "points, no headers)."
+)
+
+
 def heatmap(request):
     latest_by_risk = _latest_assessments_by_risk()
 
@@ -114,14 +160,53 @@ def heatmap(request):
             )
         grid.append({"likelihood": likelihood, "cells": row_cells})
 
+    trend_data = _monthly_trend()
+    overdue_mitigations = _overdue_mitigations()
+
+    ai_insight = None
+    ai_error = None
+    if request.method == "POST" and request.POST.get("action") == "generate_insight":
+        try:
+            portfolio_context = _build_portfolio_context(
+                grid, trend_data, overdue_mitigations
+            )
+            ai_insight = ai.generate_text(AI_INSIGHT_SYSTEM_PROMPT, portfolio_context)
+        except ai.AIError as exc:
+            ai_error = str(exc)
+
     context = {
         "grid": grid,
         "total_risks": Risk.objects.count(),
         "assessed_risks": len(latest_by_risk),
-        "trend_data": _monthly_trend(),
-        "overdue_mitigations": _overdue_mitigations(),
+        "trend_data": trend_data,
+        "overdue_mitigations": overdue_mitigations,
+        "ai_insight": ai_insight,
+        "ai_error": ai_error,
     }
     return render(request, "risks/heatmap.html", context)
+
+
+def ai_settings(request):
+    settings_obj = AISettings.load()
+    if request.method == "POST":
+        model = request.POST.get("model", "").strip()
+        api_key = request.POST.get("api_key", "").strip()
+        if model:
+            settings_obj.model = model
+        if api_key:
+            settings_obj.api_key = api_key
+        settings_obj.save()
+        return redirect("risks:ai_settings")
+
+    key_preview = None
+    if settings_obj.api_key:
+        key_preview = "•" * 8 + settings_obj.api_key[-4:]
+
+    return render(
+        request,
+        "risks/ai_settings.html",
+        {"settings": settings_obj, "key_preview": key_preview},
+    )
 
 
 def register(request):
@@ -157,3 +242,126 @@ def register(request):
         "selected_department": department_id,
     }
     return render(request, "risks/register.html", context)
+
+
+AI_DRAFT_SYSTEM_PROMPT = (
+    "You are a GRC risk analyst. Given a risk title and category, draft a "
+    "plausible, specific risk record for it. Respond as a JSON object with "
+    "exactly these keys: description (2-3 sentence string), likelihood "
+    "(integer 1-5), impact (integer 1-5), treatment_type (one of: accept, "
+    "mitigate, transfer, avoid), mitigation_action_plan (2-3 sentence "
+    "string). Plain prose only, no markdown."
+)
+
+
+def _clamp_1_5(value, default=3):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(5, n))
+
+
+def ai_draft(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        payload = json.loads(request.body)
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Invalid request body"}, status=400)
+
+    title = (payload.get("title") or "").strip()
+    if not title:
+        return JsonResponse({"error": "Enter a title first."}, status=400)
+
+    category_name = ""
+    category_id = payload.get("category")
+    if category_id:
+        category = RiskCategory.objects.filter(id=category_id).first()
+        category_name = category.name if category else ""
+
+    user_prompt = f"Risk title: {title}\nCategory: {category_name or 'unspecified'}"
+
+    try:
+        draft = ai.generate_json(AI_DRAFT_SYSTEM_PROMPT, user_prompt)
+    except ai.AIError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+
+    valid_treatments = {choice[0] for choice in Mitigation.TreatmentType.choices}
+    treatment_type = draft.get("treatment_type")
+    if treatment_type not in valid_treatments:
+        treatment_type = Mitigation.TreatmentType.MITIGATE
+
+    return JsonResponse(
+        {
+            "description": draft.get("description", ""),
+            "likelihood": _clamp_1_5(draft.get("likelihood")),
+            "impact": _clamp_1_5(draft.get("impact")),
+            "treatment_type": treatment_type,
+            "mitigation_action_plan": draft.get("mitigation_action_plan", ""),
+        }
+    )
+
+
+def new_risk(request):
+    if request.method == "POST":
+        date_identified_raw = request.POST.get("date_identified")
+        date_identified = (
+            date.fromisoformat(date_identified_raw)
+            if date_identified_raw
+            else timezone.localdate()
+        )
+        owner_id = request.POST.get("owner")
+
+        risk = Risk.objects.create(
+            title=request.POST.get("title", "").strip(),
+            description=request.POST.get("description", "").strip(),
+            category_id=request.POST.get("category"),
+            department_id=request.POST.get("department"),
+            owner_id=owner_id,
+            status=request.POST.get("status", Risk.Status.IDENTIFIED),
+            date_identified=date_identified,
+        )
+
+        likelihood = request.POST.get("likelihood")
+        impact = request.POST.get("impact")
+        if likelihood and impact:
+            RiskAssessment.objects.create(
+                risk=risk,
+                kind=RiskAssessment.Kind.INHERENT,
+                likelihood=_clamp_1_5(likelihood),
+                impact=_clamp_1_5(impact),
+                assessed_by_id=owner_id,
+                assessed_date=date_identified,
+            )
+
+        treatment_type = request.POST.get("treatment_type")
+        action_plan = request.POST.get("mitigation_action_plan", "").strip()
+        if treatment_type and action_plan:
+            due_date_raw = request.POST.get("due_date")
+            due_date = (
+                date.fromisoformat(due_date_raw)
+                if due_date_raw
+                else date_identified + timedelta(days=90)
+            )
+            Mitigation.objects.create(
+                risk=risk,
+                treatment_type=treatment_type,
+                action_plan=action_plan,
+                owner_id=owner_id,
+                due_date=due_date,
+                status=Mitigation.Status.NOT_STARTED,
+            )
+
+        return redirect(f"/admin/risks/risk/{risk.id}/change/")
+
+    context = {
+        "categories": RiskCategory.objects.order_by("name"),
+        "departments": Department.objects.order_by("name"),
+        "owners": get_user_model().objects.order_by("username"),
+        "statuses": Risk.Status.choices,
+        "treatment_types": Mitigation.TreatmentType.choices,
+        "today": timezone.localdate(),
+    }
+    return render(request, "risks/new_risk.html", context)

@@ -66,6 +66,41 @@
   <span><span class="swatch band-critical"></span>Critical (16–25)</span>
 </div>
 
+<section class="ai-panel">
+  <h2>AI Portfolio Summary</h2>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="generate_insight">
+    <button type="submit">Generate Insight</button>
+  </form>
+  {% if ai_insight %}
+  <p class="ai-insight-text">{{ ai_insight }}</p>
+  {% elif ai_error %}
+  <p class="ai-error-text">
+    {{ ai_error }}
+    {% if "AI Settings" in ai_error %}
+      <a href="{% url 'risks:ai_settings' %}">Go to AI Settings</a>.
+    {% endif %}
+  </p>
+  {% else %}
+  <p class="panel-hint">Summarizes current top risks, score trend, and overdue mitigations — costs one API call, generated on demand.</p>
+  {% endif %}
+</section>
+
+<style>
+  .ai-panel { margin-top: 2.5rem; max-width: 48rem; }
+  .ai-panel h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+  .ai-panel button {
+    border: 1px solid var(--border); background: transparent; color: var(--fg);
+    border-radius: 4px; padding: 0.5rem 1.1rem; font-size: 0.9rem; cursor: pointer;
+  }
+  .ai-insight-text {
+    margin-top: 1rem; padding: 1rem 1.25rem; border: 1px solid var(--border);
+    border-radius: 6px; line-height: 1.5; font-size: 0.95rem;
+  }
+  .ai-error-text { margin-top: 1rem; font-size: 0.9rem; color: var(--critical); }
+</style>
+
 <div class="dashboard-row">
   <section class="panel">
     <h2>Risk Score Trend</h2>

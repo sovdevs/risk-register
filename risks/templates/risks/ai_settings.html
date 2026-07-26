@@ -1,0 +1,50 @@
+{% extends "risks/base.html" %}
+
+{% block title %}AI Settings — Risk Register{% endblock %}
+
+{% block content %}
+<h1>AI Settings</h1>
+<p style="color: var(--muted); max-width: 40rem;">
+  BYOK — this key is stored in this project's local SQLite database
+  (plaintext, no external secret store) and used server-side for the AI
+  insight/draft/Q&A features. Fine for a local demo; not how you'd store a
+  key in production.
+</p>
+
+<style>
+  .ai-settings-form { max-width: 28rem; margin-top: 1.5rem; }
+  .ai-settings-form label {
+    display: flex; flex-direction: column; font-size: 0.85rem;
+    color: var(--muted); gap: 0.3rem; margin-bottom: 1.1rem;
+  }
+  .ai-settings-form input {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0.5rem 0.6rem; font-size: 0.95rem;
+    font-family: inherit;
+  }
+  .ai-settings-form button {
+    border: 1px solid var(--border); background: transparent; color: var(--fg);
+    border-radius: 4px; padding: 0.5rem 1.1rem; font-size: 0.9rem; cursor: pointer;
+  }
+  .status-line { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; }
+</style>
+
+<p class="status-line">
+  API key:
+  {% if key_preview %}<code>{{ key_preview }}</code>{% else %}<strong>not set</strong>{% endif %}
+  &nbsp;·&nbsp; Model: <code>{{ settings.model }}</code>
+</p>
+
+<form class="ai-settings-form" method="post">
+  {% csrf_token %}
+  <label>
+    OpenAI API key
+    <input type="password" name="api_key" placeholder="Leave blank to keep the current key" autocomplete="off">
+  </label>
+  <label>
+    Model
+    <input type="text" name="model" value="{{ settings.model }}" placeholder="e.g. gpt-4o-mini">
+  </label>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "risks/base.html" %}
+
+{% block title %}New Risk — Risk Register{% endblock %}
+
+{% block content %}
+<h1>New Risk</h1>
+<p style="color: var(--muted); max-width: 40rem;">
+  Fill in a title and category, then optionally use "Draft with AI" to
+  generate a description, a suggested likelihood/impact, and a mitigation
+  plan — everything it fills in is editable before you save, nothing is
+  applied automatically.
+</p>
+
+<style>
+  .risk-form { max-width: 42rem; margin-top: 1.5rem; }
+  .risk-form label {
+    display: flex; flex-direction: column; font-size: 0.85rem;
+    color: var(--muted); gap: 0.3rem; margin-bottom: 1.1rem;
+  }
+  .risk-form input, .risk-form select, .risk-form textarea {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0.5rem 0.6rem; font-size: 0.9rem; font-family: inherit;
+  }
+  .risk-form textarea { resize: vertical; min-height: 4.5rem; }
+  .form-row { display: flex; gap: 1rem; }
+  .form-row label { flex: 1; }
+  .risk-form button {
+    border: 1px solid var(--border); background: transparent; color: var(--fg);
+    border-radius: 4px; padding: 0.55rem 1.2rem; font-size: 0.9rem; cursor: pointer;
+  }
+  .draft-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem 0 1.75rem; }
+  .draft-status { font-size: 0.8rem; color: var(--muted); }
+  fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 0.25rem 1.25rem 1rem; margin: 1.5rem 0; }
+  legend { font-size: 0.8rem; color: var(--muted); padding: 0 0.4rem; }
+</style>
+
+<form class="risk-form" method="post" id="risk-form">
+  {% csrf_token %}
+  <label>
+    Title
+    <input type="text" name="title" id="id_title" required>
+  </label>
+
+  <div class="form-row">
+    <label>
+      Category
+      <select name="category" id="id_category" required>
+        {% for category in categories %}
+        <option value="{{ category.id }}">{{ category.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Department
+      <select name="department" required>
+        {% for department in departments %}
+        <option value="{{ department.id }}">{{ department.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <div class="form-row">
+    <label>
+      Owner
+      <select name="owner" required>
+        {% for owner in owners %}
+        <option value="{{ owner.id }}">{{ owner.get_full_name|default:owner.username }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Status
+      <select name="status">
+        {% for value, label in statuses %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Date identified
+      <input type="date" name="date_identified" value="{{ today|date:'Y-m-d' }}">
+    </label>
+  </div>
+
+  <div class="draft-row">
+    <button type="button" id="draft-button">Draft with AI</button>
+    <span class="draft-status" id="draft-status"></span>
+  </div>
+
+  <label>
+    Description
+    <textarea name="description" id="id_description"></textarea>
+  </label>
+
+  <fieldset>
+    <legend>Inherent assessment (optional)</legend>
+    <div class="form-row">
+      <label>
+        Likelihood (1-5)
+        <select name="likelihood" id="id_likelihood">
+          <option value="">—</option>
+          {% for i in "12345" %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>
+        Impact (1-5)
+        <select name="impact" id="id_impact">
+          <option value="">—</option>
+          {% for i in "12345" %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Mitigation (optional)</legend>
+    <label>
+      Treatment type
+      <select name="treatment_type" id="id_treatment_type">
+        <option value="">—</option>
+        {% for value, label in treatment_types %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Action plan
+      <textarea name="mitigation_action_plan" id="id_mitigation_action_plan"></textarea>
+    </label>
+    <label>
+      Due date
+      <input type="date" name="due_date">
+    </label>
+  </fieldset>
+
+  <button type="submit">Save Risk</button>
+</form>
+
+<script>
+  document.getElementById("draft-button").addEventListener("click", async () => {
+    const title = document.getElementById("id_title").value.trim();
+    const status = document.getElementById("draft-status");
+    if (!title) {
+      status.textContent = "Enter a title first.";
+      return;
+    }
+    status.textContent = "Drafting…";
+    try {
+      const resp = await fetch("{% url 'risks:ai_draft' %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+        },
+        body: JSON.stringify({
+          title: title,
+          category: document.getElementById("id_category").value,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        status.textContent = data.error || "Draft failed.";
+        return;
+      }
+      document.getElementById("id_description").value = data.description || "";
+      document.getElementById("id_likelihood").value = data.likelihood || "";
+      document.getElementById("id_impact").value = data.impact || "";
+      document.getElementById("id_treatment_type").value = data.treatment_type || "";
+      document.getElementById("id_mitigation_action_plan").value = data.mitigation_action_plan || "";
+      status.textContent = "Drafted — review before saving.";
+    } catch (err) {
+      status.textContent = "Draft failed: " + err;
+    }
+  });
+</script>
+{% endblock %}
