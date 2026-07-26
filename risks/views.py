@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -6,6 +7,8 @@ from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 
 from . import ai
 from .models import AISettings, Department, Mitigation, Risk, RiskAssessment, RiskCategory
@@ -80,6 +83,31 @@ def _monthly_trend():
     return {"labels": labels, "scores": scores}
 
 
+def _linkify_risk_mentions(text):
+    # AI-generated text (insight, Q&A answers) often names specific risks
+    # verbatim since their exact titles are in the prompt context. Turn
+    # those mentions into links back to the risk's admin page — escape
+    # the raw text first (it's model output, not trusted), then insert
+    # our own <a> tags in a single regex pass so a shorter title can't
+    # get double-wrapped if it happens to be a substring of a longer
+    # one's already-linked HTML.
+    escaped = escape(text)
+    risks = sorted(
+        Risk.objects.only("id", "title"), key=lambda r: len(r.title), reverse=True
+    )
+    if not risks:
+        return mark_safe(escaped)
+
+    by_escaped_title = {escape(r.title): r for r in risks}
+    pattern = "|".join(re.escape(t) for t in by_escaped_title)
+
+    def _replace(match):
+        risk = by_escaped_title[match.group(0)]
+        return f'<a href="/admin/risks/risk/{risk.id}/change/">{match.group(0)}</a>'
+
+    return mark_safe(re.sub(pattern, _replace, escaped))
+
+
 def _overdue_mitigations():
     today = timezone.localdate()
     overdue = list(
@@ -128,10 +156,11 @@ def _build_portfolio_context(grid, trend_data, overdue_mitigations):
 AI_INSIGHT_SYSTEM_PROMPT = (
     "You are a GRC risk analyst assistant. Given this risk portfolio data, "
     "write a concise 3-4 sentence executive summary highlighting the "
-    "biggest concerns and any notable trend. Reference specific risk names "
-    "and numbers from the data provided. Do not invent risks not listed. "
-    "Plain prose only — no markdown formatting (no **bold**, no bullet "
-    "points, no headers)."
+    "biggest concerns and any notable trend. When naming a risk, quote its "
+    "title exactly as given — this lets the app turn it into a link. "
+    "Reference specific risk names and numbers from the data provided. Do "
+    "not invent risks not listed. Plain prose only — no markdown "
+    "formatting (no **bold**, no bullet points, no headers)."
 )
 
 
@@ -170,7 +199,8 @@ def heatmap(request):
             portfolio_context = _build_portfolio_context(
                 grid, trend_data, overdue_mitigations
             )
-            ai_insight = ai.generate_text(AI_INSIGHT_SYSTEM_PROMPT, portfolio_context)
+            raw_insight = ai.generate_text(AI_INSIGHT_SYSTEM_PROMPT, portfolio_context)
+            ai_insight = _linkify_risk_mentions(raw_insight)
         except ai.AIError as exc:
             ai_error = str(exc)
 
@@ -371,8 +401,10 @@ AI_ASK_SYSTEM_PROMPT = (
     "You are a GRC risk analyst assistant answering questions about this "
     "organization's risk register. Answer ONLY using the data provided — "
     "do not invent risks, scores, owners, or details not present in it. "
-    "If the question can't be answered from the data, say so plainly. "
-    "Keep answers concise. Plain prose only, no markdown."
+    "When naming a specific risk, quote its title exactly as given — this "
+    "lets the app turn it into a link. If the question can't be answered "
+    "from the data, say so plainly. Keep answers concise. Plain prose "
+    "only, no markdown."
 )
 
 
@@ -424,7 +456,8 @@ def ai_ask(request):
                     f"Risk register data:\n{_register_context()}\n\n"
                     f"Question: {question}"
                 )
-                answer = ai.generate_text(AI_ASK_SYSTEM_PROMPT, user_prompt)
+                raw_answer = ai.generate_text(AI_ASK_SYSTEM_PROMPT, user_prompt)
+                answer = _linkify_risk_mentions(raw_answer)
             except ai.AIError as exc:
                 error = str(exc)
 

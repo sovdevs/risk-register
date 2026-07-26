@@ -1,12 +1,36 @@
 # Risk Register
 
-A place to track organizational risks — the kind of tool a compliance or
-security team uses to answer "what could go wrong, how bad would it be,
-and what are we doing about it." Built in short, runnable Django cycles;
-see [SPEC.md](SPEC.md) for the full data model and roadmap, or the
+**What this demo is actually about**: how a thin AI layer, dropped on top
+of an otherwise static Django CRUD backend, makes that backend's data
+meaningfully easier to get information *out of* — without changing the
+underlying data model at all. Cycles 1-8 built a real, ordinary Django
+app: models, admin, a heatmap dashboard, filters, an audit trail — no AI
+anywhere. Cycles 9-12 then added a BYOK OpenAI layer on top of that
+already-finished app: ask it questions in plain English, get a portfolio
+summary on demand, get help drafting a new entry. The underlying app
+happens to be an enterprise-style risk register (likelihood × impact
+scoring, mitigation tracking — the kind of tool a GRC vendor like
+Athereon builds), but the point of the exercise was the retrieval layer,
+not the register itself.
+
+See [SPEC.md](SPEC.md) for the full data model and roadmap, or the
 cycle-by-cycle notes below for what shipped when and why.
 
-**What it does:**
+**The AI layer — the actual point of this demo:**
+
+- **Ask it** (`/ai/ask/`) — natural-language Q&A grounded in the entire
+  current register (every risk's data, passed as context with each
+  question); answers only from what's actually there, says so if it
+  can't answer, and any risk it names becomes a clickable link to that
+  record.
+- **Summarize it** (`/` → "Generate Insight") — a one-click portfolio
+  summary (top risks, score trend, overdue mitigations) instead of
+  reading the dashboard yourself.
+- **Draft with it** (`/new/` → "Draft with AI") — given just a title and
+  category, drafts a description, a suggested likelihood/impact, and a
+  mitigation plan — editable before saving, nothing auto-applied.
+
+**The underlying static app it sits on:**
 
 - **Log a risk** — title, description, category (Cyber, Financial, Legal
   & Regulatory, etc.), owning department, responsible owner, and a
@@ -30,9 +54,9 @@ cycle-by-cycle notes below for what shipped when and why.
   page in admin showing who changed what and when.
 - **Data entry** — Django admin (`/admin/`) handles actual CRUD.
 
-Comes seeded with 27 realistic risks across 7 categories (unpatched CVEs,
-GDPR backlogs, vendor risk, budget overruns, etc.) — see `seed_demo`
-below.
+Comes seeded with 27-28 realistic risks across 7 categories (unpatched
+CVEs, GDPR backlogs, vendor risk, budget overruns, etc.) — see
+`seed_demo` below.
 
 ## Running it
 
