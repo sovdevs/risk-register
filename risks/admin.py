@@ -34,7 +34,8 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(RiskCategory)
 class RiskCategoryAdmin(admin.ModelAdmin):
-    list_display = ["name", "description"]
+    list_display = ["name", "description", "requires_approval"]
+    list_editable = ["requires_approval"]
     search_fields = ["name"]
 
 

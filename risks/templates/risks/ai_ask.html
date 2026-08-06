@@ -31,6 +31,31 @@
   }
   .qa-error { color: var(--critical); font-size: 0.9rem; }
   .examples { margin-top: 2rem; font-size: 0.85rem; color: var(--muted); max-width: 40rem; }
+
+  .pending { max-width: 40rem; margin-top: 1.25rem; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1rem 1.25rem; }
+  .pending-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted); margin: 0 0 0.6rem; }
+  .pending-action { font-size: 0.9rem; line-height: 1.5; margin: 0 0 0.6rem; }
+  .pending-action:last-of-type { margin-bottom: 1rem; }
+  .pending-action dt { font-weight: 600; }
+  .pending-action dl { margin: 0.3rem 0 0; }
+  .pending-action dl div { display: flex; gap: 0.4rem; }
+  .pending-action dl dt { min-width: 8rem; color: var(--muted); font-weight: 400; }
+  .pending-actions-buttons { display: flex; gap: 0.6rem; }
+  .pending-actions-buttons button {
+    border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem 1.1rem;
+    font-size: 0.9rem; cursor: pointer; font-family: inherit;
+  }
+  .pending-actions-buttons button[value="approve"] { background: var(--fg); color: var(--bg); }
+  .pending-actions-buttons button[value="reject"] { background: transparent; color: var(--fg); }
+  .confirmed { max-width: 40rem; margin-top: 1.25rem; font-size: 0.9rem; color: var(--muted); }
+
+  .nudge { max-width: 40rem; margin-top: 1.5rem; border: 1px solid var(--critical);
+    border-radius: 6px; padding: 1rem 1.25rem; }
+  .nudge-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--critical); margin: 0 0 0.6rem; }
+  .nudge ul { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; line-height: 1.6; }
 </style>
 
 <form class="ask-form" method="post">
@@ -38,6 +63,36 @@
   <input type="text" name="question" placeholder="e.g. What are our top open Cyber risks?" value="{{ question }}" required autofocus>
   <button type="submit">Ask</button>
 </form>
+
+{% if overdue_mitigations %}
+<div class="nudge">
+  <p class="nudge-label">Proactive check — {{ overdue_mitigations|length }} mitigation{{ overdue_mitigations|length|pluralize }} overdue</p>
+  <ul>
+    {% for m in overdue_mitigations %}
+    <li>
+      <a href="/admin/risks/risk/{{ m.risk.id }}/change/">{{ m.risk.title }}</a>
+      — {{ m.owner.get_full_name|default:m.owner.username }}, {{ m.days_overdue }} day{{ m.days_overdue|pluralize }} overdue
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if confirmed %}
+<div class="confirmed">
+  {% if confirmed.approved %}
+    {% if confirmed.auto %}<p class="pending-label">Applied automatically — this risk's category doesn't require approval</p>{% endif %}
+    {% for result in confirmed.results %}
+      <p>
+        {{ result.text }}
+        {% if result.url %}<a href="{{ result.url }}">View record</a>{% endif %}
+      </p>
+    {% endfor %}
+  {% else %}
+    <p>Discarded — nothing was changed.</p>
+  {% endif %}
+</div>
+{% endif %}
 
 {% if question and answer %}
 <div class="qa-pair">
@@ -58,7 +113,34 @@
 <div class="examples">
   Try: "What are our top open Cyber risks?" · "Which mitigations are
   overdue?" · "What's the plan for the ransomware risk?" · "Summarize our
-  Third-Party risk exposure."
+  Third-Party risk exposure." · "Create a mitigation for the ransomware
+  risk, owner jsmith, due in 30 days."
+</div>
+{% endif %}
+
+{% if pending %}
+<div class="pending">
+  <p class="pending-label">Proposed changes — nothing is saved until you approve</p>
+  {% for action in pending.actions %}
+  <div class="pending-action">
+    <strong>
+      {% if action.tool == "create_mitigation" %}Create mitigation{% else %}Update mitigation{% endif %}
+      — {{ action.args.risk_title }}
+    </strong>
+    <dl>
+      {% for key, value in action.args.items %}
+        {% if key != "risk_title" %}
+        <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
+        {% endif %}
+      {% endfor %}
+    </dl>
+  </div>
+  {% endfor %}
+  <form method="post" action="{% url 'risks:ai_agent_confirm' %}" class="pending-actions-buttons">
+    {% csrf_token %}
+    <button type="submit" name="decision" value="approve">Approve</button>
+    <button type="submit" name="decision" value="reject">Discard</button>
+  </form>
 </div>
 {% endif %}
 {% endblock %}

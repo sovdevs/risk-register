@@ -399,13 +399,83 @@ def new_risk(request):
 
 AI_ASK_SYSTEM_PROMPT = (
     "You are a GRC risk analyst assistant answering questions about this "
-    "organization's risk register. Answer ONLY using the data provided — "
-    "do not invent risks, scores, owners, or details not present in it. "
-    "When naming a specific risk, quote its title exactly as given — this "
-    "lets the app turn it into a link. If the question can't be answered "
-    "from the data, say so plainly. Keep answers concise. Plain prose "
-    "only, no markdown."
+    "organization's risk register and, when asked, proposing changes via "
+    "the create_mitigation / update_mitigation tools. Answer and act ONLY "
+    "using the data provided — do not invent risks, scores, owners, or "
+    "details not present in it. When naming a specific risk, quote its "
+    "title exactly as given — this lets the app turn it into a link. If "
+    "the question can't be answered from the data, say so plainly. If the "
+    "user asks you to create, assign, or update a mitigation, call the "
+    "matching tool instead of just describing it in prose — the app will "
+    "show it to the user for approval before saving anything. Keep answers "
+    "concise. Plain prose only, no markdown."
 )
+
+
+def _action_requires_approval(action):
+    """Whether this proposed action needs a human OK before it's applied,
+    per the risk's category setting. Unresolvable risk/title still routes
+    through the approval step so the error surfaces there, not silently."""
+    risk_title = action["args"].get("risk_title", "")
+    risk = Risk.objects.filter(title__iexact=risk_title).select_related("category").first()
+    return risk is None or risk.category.requires_approval
+
+
+def _execute_agent_action(action):
+    """Applies one approved action dict ({"tool": ..., "args": ...}) to the
+    database. Returns (message, admin_url) so the caller can link straight
+    to the changed record as evidence, or raises ValueError with a message
+    safe to show the user."""
+    User = get_user_model()
+    args = action["args"]
+    risk_title = args.get("risk_title", "")
+    try:
+        risk = Risk.objects.get(title__iexact=risk_title)
+    except Risk.DoesNotExist:
+        raise ValueError(f"No risk titled \"{risk_title}\" — nothing was changed.")
+    except Risk.MultipleObjectsReturned:
+        raise ValueError(f"Multiple risks titled \"{risk_title}\" — nothing was changed.")
+
+    if action["tool"] == "create_mitigation":
+        owner_username = args.get("owner_username", "")
+        try:
+            owner = User.objects.get(username=owner_username)
+        except User.DoesNotExist:
+            raise ValueError(f"No user \"{owner_username}\" — nothing was changed.")
+        mitigation = Mitigation.objects.create(
+            risk=risk,
+            treatment_type=args["treatment_type"],
+            action_plan=args["action_plan"],
+            owner=owner,
+            due_date=args["due_date"],
+        )
+        return (
+            f"Created mitigation for \"{risk.title}\".",
+            f"/admin/risks/risk/{risk.id}/change/",
+        )
+
+    if action["tool"] == "update_mitigation":
+        mitigation = risk.mitigations.first()
+        if not mitigation:
+            raise ValueError(f"\"{risk.title}\" has no mitigation to update.")
+        if "status" in args:
+            mitigation.status = args["status"]
+        if "due_date" in args:
+            mitigation.due_date = args["due_date"]
+        if "action_plan" in args:
+            mitigation.action_plan = args["action_plan"]
+        if "owner_username" in args:
+            try:
+                mitigation.owner = User.objects.get(username=args["owner_username"])
+            except User.DoesNotExist:
+                raise ValueError(f"No user \"{args['owner_username']}\" — nothing was changed.")
+        mitigation.save()
+        return (
+            f"Updated mitigation for \"{risk.title}\".",
+            f"/admin/risks/risk/{risk.id}/change/",
+        )
+
+    raise ValueError(f"Unknown action \"{action['tool']}\".")
 
 
 def _register_context():
@@ -448,6 +518,8 @@ def ai_ask(request):
     question = ""
     answer = None
     error = None
+    confirmed = request.session.pop("ai_confirmed", None)
+
     if request.method == "POST":
         question = request.POST.get("question", "").strip()
         if question:
@@ -456,13 +528,56 @@ def ai_ask(request):
                     f"Risk register data:\n{_register_context()}\n\n"
                     f"Question: {question}"
                 )
-                raw_answer = ai.generate_text(AI_ASK_SYSTEM_PROMPT, user_prompt)
-                answer = _linkify_risk_mentions(raw_answer)
+                raw_answer, actions = ai.run_agent(AI_ASK_SYSTEM_PROMPT, user_prompt)
+                answer = _linkify_risk_mentions(raw_answer) if raw_answer else None
+
+                gated = [a for a in actions if _action_requires_approval(a)]
+                auto = [a for a in actions if a not in gated]
+                auto_results = []
+                for action in auto:
+                    try:
+                        text, url = _execute_agent_action(action)
+                        auto_results.append({"text": text, "url": url})
+                    except ValueError as exc:
+                        auto_results.append({"text": str(exc), "url": None})
+
+                if gated:
+                    request.session["ai_pending"] = {"question": question, "actions": gated}
+                else:
+                    request.session.pop("ai_pending", None)
+                if auto_results:
+                    confirmed = {"approved": True, "results": auto_results, "auto": True}
             except ai.AIError as exc:
                 error = str(exc)
 
+    pending = request.session.get("ai_pending")
     return render(
         request,
         "risks/ai_ask.html",
-        {"question": question, "answer": answer, "error": error},
+        {
+            "question": question,
+            "answer": answer,
+            "error": error,
+            "pending": pending,
+            "confirmed": confirmed,
+            "overdue_mitigations": _overdue_mitigations(),
+        },
     )
+
+
+def ai_agent_confirm(request):
+    if request.method == "POST":
+        pending = request.session.pop("ai_pending", None)
+        if pending:
+            if request.POST.get("decision") == "approve":
+                results = []
+                for action in pending["actions"]:
+                    try:
+                        text, url = _execute_agent_action(action)
+                        results.append({"text": text, "url": url})
+                    except ValueError as exc:
+                        results.append({"text": str(exc), "url": None})
+                request.session["ai_confirmed"] = {"approved": True, "results": results}
+            else:
+                request.session["ai_confirmed"] = {"approved": False, "results": []}
+    return redirect("risks:ai_ask")

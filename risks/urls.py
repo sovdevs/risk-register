@@ -11,4 +11,5 @@ urlpatterns = [
     path("ai/settings/", views.ai_settings, name="ai_settings"),
     path("ai/draft/", views.ai_draft, name="ai_draft"),
     path("ai/ask/", views.ai_ask, name="ai_ask"),
+    path("ai/ask/confirm/", views.ai_agent_confirm, name="ai_agent_confirm"),
 ]

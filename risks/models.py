@@ -17,6 +17,11 @@ class Department(models.Model):
 class RiskCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
+    requires_approval = models.BooleanField(
+        default=True,
+        help_text="If off, the AI assistant applies writes to risks in this "
+        "category immediately instead of asking for approval first.",
+    )
 
     class Meta:
         ordering = ["name"]
