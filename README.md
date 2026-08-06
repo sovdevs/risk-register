@@ -18,11 +18,17 @@ cycle-by-cycle notes below for what shipped when and why.
 
 **The AI layer — the actual point of this demo:**
 
-- **Ask it** (`/ai/ask/`) — natural-language Q&A grounded in the entire
-  current register (every risk's data, passed as context with each
-  question); answers only from what's actually there, says so if it
-  can't answer, and any risk it names becomes a clickable link to that
-  record.
+- **Ask it, and let it act** (`/ai/ask/`) — natural-language Q&A that
+  looks up whatever it needs via tool calls (`search_risks`,
+  `get_risk_detail`) instead of getting the whole register dumped in up
+  front; any risk it names becomes a clickable link. It can also propose
+  writes (`create_mitigation`, `update_mitigation`) — shown as a pending
+  diff you approve or discard, nothing saved until you say so, unless a
+  risk's category has been marked as not requiring approval. The page
+  also runs a standing proactive check for overdue mitigations, surfaced
+  before you ask anything. A collapsible panel lists every tool the
+  assistant has, its description, and the live system prompt — what it
+  can do isn't hidden behind the chat.
 - **Summarize it** (`/` → "Generate Insight") — a one-click portfolio
   summary (top risks, score trend, overdue mitigations) instead of
   reading the dashboard yourself.
@@ -239,3 +245,70 @@ data model + admin (cycles 1-3), heatmap/register/trend/overdue
 dashboards (cycles 4-6), audit trail (cycle 7), polish (cycle 8), and a
 full BYOK AI layer — settings, portfolio insight, draft-assist, and Q&A
 (cycles 9-12).
+
+## Cycle 13 (done) — Agentic assistant: propose-then-approve writes, proactive checks, multi-tool reasoning
+
+Phase 3, new scope: turning the Q&A assistant from cycle 12 into
+something closer to an agent — able to act (with approval), notice
+things unprompted, and reason over the register via tool calls instead
+of a full context dump. Modeled after a competitor's ("LAiKA") feature
+set, scoped down to what fits this app without new infrastructure (no
+Teams/email integration, no scheduler, no asset-inventory module — those
+were explicitly cut, see below).
+
+- **Propose-then-approve writes.** `ai.run_agent()` gives the model two
+  write tools, `create_mitigation` and `update_mitigation`
+  (`risks/ai.py`). Neither executes inline — every call is queued and
+  returned to the caller as a proposed action. `/ai/ask/` renders queued
+  actions as a diff card with Approve/Discard buttons; approving runs
+  `_execute_agent_action()` (`risks/views.py`), which validates the risk
+  and owner exist before writing anything, and the confirmation links
+  straight to the changed risk's admin page as evidence.
+- **Configurable approval.** `RiskCategory.requires_approval` (default
+  `True`, list-editable in admin) lets a category opt out of the gate —
+  matching writes apply immediately and say so on the page
+  (`_action_requires_approval()`). An unresolvable risk title still
+  routes through the approval step rather than silently applying, so
+  ambiguity never bypasses the gate.
+- **Proactive overdue check.** `/ai/ask/` shows a standing "N mitigations
+  overdue" banner, grouped by owner and linked to each record, before
+  any question is asked — reusing the same `_overdue_mitigations()`
+  helper the heatmap's dashboard list already used. No scheduler, no
+  external notification channel (Teams/email) — this is a page-load
+  check, not a background job; real proactive nagging of owners needs
+  actual users and a delivery channel this demo doesn't have.
+- **Multi-tool reasoning, replacing the context dump.** Cycle 12's
+  `_register_context()` (full text dump of every risk, ~16.5K chars) is
+  gone. The model now calls `search_risks` (filter by owner, status,
+  category, overdue) and `get_risk_detail` (full detail for one risk) —
+  read tools execute immediately server-side and feed results back, in
+  a loop (`ai.run_agent()`, max 5 rounds) — so it only pulls what a
+  given question actually needs.
+- **Transparent, single-source-of-truth prompts.** `ai.TOOLS` is one
+  registry (name, `kind` read/write, description, JSON-schema
+  parameters) that generates both the OpenAI tool schema sent to the
+  model and a "what the assistant can do" panel on `/ai/ask/` — the
+  same text the model sees is what the page shows, so there's no
+  separate/hand-copied description to drift out of sync. The system
+  prompt is shown in the same panel.
+- **Two real bugs found and fixed via live testing**, not just written
+  tests: `search_risks` returned an empty (not error) result for a
+  typo'd/nonexistent `owner_username`, so the assistant reported false
+  negatives ("X has no overdue risks") instead of saying it couldn't
+  find that user — now returns `{"error": ...}`. And `owner_username`
+  only matched `Risk.owner`, missing risks where the person is the
+  *mitigation's* owner instead (a different, sometimes-different
+  person) — now matches either via `Q(owner=...) | Q(mitigations__owner=...)`.
+
+**Explicitly cut**, to keep this an extension of the existing app rather
+than a rebuild: an "Infrastructure Mapper"-equivalent asset inventory
+(new domain — assets/metamodel/protection-need scoring — not a risk
+register concern, and would replicate modeling work already done here
+for risks themselves); MS Teams/email delivery for nudges; a scheduler
+for true background/unprompted runs; multi-turn clarifying follow-up
+questions (the right tool for that is a proper agent framework with
+conversation state, not something to hand-roll here); and "autonomous
+prioritization" as a distinct capability — without new write scope or
+external system access, an agent here has nothing to do but nag, so
+that's just a ranking policy on data already surfaced, not a new
+feature.
