@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -398,17 +399,17 @@ def new_risk(request):
 
 
 AI_ASK_SYSTEM_PROMPT = (
-    "You are a GRC risk analyst assistant answering questions about this "
-    "organization's risk register and, when asked, proposing changes via "
-    "the create_mitigation / update_mitigation tools. Answer and act ONLY "
-    "using the data provided — do not invent risks, scores, owners, or "
-    "details not present in it. When naming a specific risk, quote its "
-    "title exactly as given — this lets the app turn it into a link. If "
-    "the question can't be answered from the data, say so plainly. If the "
-    "user asks you to create, assign, or update a mitigation, call the "
-    "matching tool instead of just describing it in prose — the app will "
-    "show it to the user for approval before saving anything. Keep answers "
-    "concise. Plain prose only, no markdown."
+    "You are a GRC risk analyst assistant for this organization's risk "
+    "register. You do not have the register memorized — use search_risks "
+    "and get_risk_detail to look up whatever the question needs before "
+    "answering; never guess at a risk, score, owner, or status you haven't "
+    "looked up. When naming a specific risk in your answer, quote its "
+    "title exactly as returned by a tool — this lets the app turn it into "
+    "a link. If a question can't be answered from what the tools return, "
+    "say so plainly. If the user asks you to create, assign, or update a "
+    "mitigation, call the matching tool instead of just describing it in "
+    "prose — the app will show it to the user for approval before saving "
+    "anything. Keep answers concise. Plain prose only, no markdown."
 )
 
 
@@ -478,40 +479,84 @@ def _execute_agent_action(action):
     raise ValueError(f"Unknown action \"{action['tool']}\".")
 
 
-def _register_context():
-    # Full context, not a retrieval subset — dataset is small enough
-    # (dozens of risks) that passing everything is simpler and more
-    # reliable than trying to guess which rows are relevant to a given
-    # question.
+def _search_risks_tool(args):
+    if args.get("owner_username") and not get_user_model().objects.filter(
+        username=args["owner_username"]
+    ).exists():
+        return {"error": f"No user \"{args['owner_username']}\"."}
+
     latest_by_risk = _latest_assessments_by_risk()
-    risks = (
-        Risk.objects.select_related("category", "department", "owner")
-        .prefetch_related("mitigations")
-        .order_by("-date_identified")
-    )
+    qs = Risk.objects.select_related("category", "department", "owner").prefetch_related("mitigations")
+    if args.get("owner_username"):
+        # "Owner" is ambiguous: Risk.owner owns the risk overall, but a
+        # mitigation's action plan can be assigned to someone else. Match
+        # either, so "which of X's risks are overdue" finds risks X is
+        # accountable for the overdue action on, not just risks X owns.
+        username = args["owner_username"]
+        qs = qs.filter(Q(owner__username=username) | Q(mitigations__owner__username=username))
+    if args.get("status"):
+        qs = qs.filter(status=args["status"])
+    if args.get("category"):
+        qs = qs.filter(category__name__iexact=args["category"])
+    if args.get("overdue_only"):
+        today = timezone.localdate()
+        qs = qs.filter(mitigations__due_date__lt=today).exclude(
+            mitigations__status=Mitigation.Status.COMPLETE
+        )
 
-    blocks = []
-    for risk in risks:
+    results = []
+    for risk in qs.distinct().order_by("-date_identified")[:20]:
         assessment = latest_by_risk.get(risk.id)
-        score = assessment.score if assessment else "unassessed"
-        lines = [
-            f"Risk: {risk.title}",
-            f"Category: {risk.category.name} | Department: {risk.department.name} "
-            f"| Owner: {risk.owner.get_full_name() or risk.owner.username}",
-            f"Status: {risk.get_status_display()} | Current score: {score}",
-            f"Description: {risk.description}",
-        ]
-        mitigation = risk.mitigations.first()
-        if mitigation:
-            overdue = " (OVERDUE)" if mitigation.is_overdue else ""
-            lines.append(
-                f"Mitigation: {mitigation.get_treatment_type_display()}, "
-                f"status {mitigation.get_status_display()}, due "
-                f"{mitigation.due_date}{overdue} — {mitigation.action_plan}"
-            )
-        blocks.append("\n".join(lines))
+        results.append({
+            "title": risk.title,
+            "category": risk.category.name,
+            "department": risk.department.name,
+            "owner": risk.owner.username,
+            "status": risk.status,
+            "score": assessment.score if assessment else None,
+        })
+    return {"count": len(results), "risks": results}
 
-    return "\n\n".join(blocks)
+
+def _get_risk_detail_tool(args):
+    try:
+        risk = Risk.objects.select_related("category", "department", "owner").get(
+            title__iexact=args.get("risk_title", "")
+        )
+    except Risk.DoesNotExist:
+        return {"error": f"No risk titled \"{args.get('risk_title')}\"."}
+
+    assessment = risk.assessments.first()
+    mitigation = risk.mitigations.first()
+    detail = {
+        "title": risk.title,
+        "category": risk.category.name,
+        "department": risk.department.name,
+        "owner": risk.owner.username,
+        "status": risk.status,
+        "description": risk.description,
+        "score": assessment.score if assessment else None,
+    }
+    if mitigation:
+        detail["mitigation"] = {
+            "treatment_type": mitigation.treatment_type,
+            "status": mitigation.status,
+            "owner": mitigation.owner.username,
+            "due_date": str(mitigation.due_date),
+            "overdue": mitigation.is_overdue,
+            "action_plan": mitigation.action_plan,
+        }
+    return detail
+
+
+READ_TOOL_EXECUTORS = {
+    "search_risks": _search_risks_tool,
+    "get_risk_detail": _get_risk_detail_tool,
+}
+
+
+def _execute_read_tool(name, args):
+    return READ_TOOL_EXECUTORS[name](args)
 
 
 def ai_ask(request):
@@ -524,11 +569,9 @@ def ai_ask(request):
         question = request.POST.get("question", "").strip()
         if question:
             try:
-                user_prompt = (
-                    f"Risk register data:\n{_register_context()}\n\n"
-                    f"Question: {question}"
+                raw_answer, actions = ai.run_agent(
+                    AI_ASK_SYSTEM_PROMPT, question, _execute_read_tool
                 )
-                raw_answer, actions = ai.run_agent(AI_ASK_SYSTEM_PROMPT, user_prompt)
                 answer = _linkify_risk_mentions(raw_answer) if raw_answer else None
 
                 gated = [a for a in actions if _action_requires_approval(a)]
@@ -561,6 +604,8 @@ def ai_ask(request):
             "pending": pending,
             "confirmed": confirmed,
             "overdue_mitigations": _overdue_mitigations(),
+            "tools": ai.TOOLS,
+            "system_prompt": AI_ASK_SYSTEM_PROMPT,
         },
     )
 

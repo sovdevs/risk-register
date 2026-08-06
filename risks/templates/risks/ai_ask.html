@@ -5,13 +5,36 @@
 {% block content %}
 <h1>Ask AI</h1>
 <p style="color: var(--muted); max-width: 40rem;">
-  Ask a question in plain English — the model is given every current risk
-  (title, category, department, owner, status, current score, description,
-  and mitigation plan where one exists) and instructed to answer only from
-  that data.
+  Ask a question in plain English — the model calls tools to look up
+  whatever it needs (it isn't given the whole register up front) and can
+  propose changes, which you approve before anything is saved.
 </p>
 
+<details class="tools-panel">
+  <summary>What the assistant can do ({{ tools|length }} tools)</summary>
+  <p class="tools-system-prompt"><strong>System prompt:</strong> {{ system_prompt }}</p>
+  <dl class="tools-list">
+    {% for tool in tools %}
+    <div class="tool-entry">
+      <dt><code>{{ tool.name }}</code> <span class="tool-kind tool-kind-{{ tool.kind }}">{{ tool.kind }}</span></dt>
+      <dd>{{ tool.description }}</dd>
+    </div>
+    {% endfor %}
+  </dl>
+</details>
+
 <style>
+  .tools-panel { max-width: 40rem; margin-top: 1rem; font-size: 0.85rem; color: var(--muted); }
+  .tools-panel summary { cursor: pointer; }
+  .tools-system-prompt { margin: 0.9rem 0; line-height: 1.5; }
+  .tools-list { margin: 0.6rem 0 0; }
+  .tool-entry { margin-bottom: 0.7rem; }
+  .tool-entry dt { font-weight: 600; color: var(--fg); }
+  .tool-entry dd { margin: 0.15rem 0 0; line-height: 1.5; }
+  .tool-kind { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em;
+    border: 1px solid var(--border); border-radius: 3px; padding: 0.05rem 0.35rem; font-weight: 400; }
+  .tool-kind-write { border-color: var(--critical); color: var(--critical); }
+
   .ask-form { max-width: 40rem; margin-top: 1.5rem; display: flex; gap: 0.75rem; }
   .ask-form input {
     flex: 1; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
